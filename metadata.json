@@ -1,0 +1,8 @@
+{
+  "name": "Court Detector SaaS",
+  "description": "An advanced SaaS platform to find, track, and manage tennis, pickleball, and basketball courts. It provides lead generation through permit/news scanning, client management, and AI-powered visual inspection tools.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

@@ -1,0 +1,167 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* --- CSS Variables & Theming --- */
+:root {
+    /* Theme Colors */
+    --color-primary: #4f46e5; /* indigo-600 */
+    --color-primary-rgb: 79, 70, 229;
+    --color-slate-100: #f1f5f9;
+    --color-slate-200: #e2e8f0;
+    --color-slate-400: #94a3b8;
+    --color-slate-600: #475569;
+    --color-slate-800: #1e293b;
+    --color-skeleton-base: #e2e8f0;
+    --color-skeleton-highlight: #f0f3f5;
+
+    /* Icon Colors - NEW HARMONIZED PALETTE */
+    --color-icon-bright: #14B8A6; /* Teal-500 */
+    --color-icon-faded: #f59e0b;  /* Amber-500 */
+    --color-icon-client: #3b82f6;  /* Blue-500 */
+    --color-icon-client-rgb: 59, 130, 246;
+    --color-icon-permit: #8b5cf6;  /* Violet-500 */
+    --color-icon-news: #0ea5e9;    /* Sky-500 */
+    --color-icon-residential-good: #0891B2; /* Cyan-600 */
+    --color-icon-residential-worn: #f59e0b;  /* Amber-500 */
+    
+    /* Status Pill Colors */
+    --color-status-new-bg: #e0f2fe;
+    --color-status-new-text: #0369a1;
+    --color-status-contacted-bg: #fef3c7;
+    --color-status-contacted-text: #92400e;
+    --color-status-proposal-bg: #ede9fe;
+    --color-status-proposal-text: #5b21b6;
+    --color-status-not-interested-bg: #f1f5f9;
+    --color-status-not-interested-text: #475569;
+}
+
+/* --- Global & Animations --- */
+body { font-family: 'Inter', sans-serif; }
+.whitespace-pre-wrap { white-space: pre-wrap; }
+
+@keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up { animation: fade-in-up 0.5s ease-out forwards; }
+
+@keyframes fade-in-item {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+.animate-fade-in { animation: fade-in-item 0.3s ease-out forwards; }
+
+@keyframes map-ping {
+    0% { transform: scale(0.5); opacity: 0; }
+    50% { transform: scale(1.2); opacity: 1; }
+    100% { transform: scale(1); }
+}
+.map-marker-ping { animation: map-ping 0.4s ease-out forwards; }
+.map-marker-highlight { transform: scale(1.3); z-index: 1000 !important; box-shadow: 0 5px 15px rgba(0,0,0,0.4); }
+
+@keyframes slide-in-up {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+
+/* --- Leaflet Map Customizations --- */
+/* Base Icon Styles */
+.icon-base {
+    border-radius: 50%;
+    border: 3px solid;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background-color: white;
+}
+.icon-base:hover { transform: scale(1.15); box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+.icon-base svg {
+    overflow: visible; /* Prevents stroke from being clipped */
+}
+
+@keyframes pulse-client { 0% { box-shadow: 0 0 0 0 rgba(var(--color-icon-client-rgb), 0.7); } 70% { box-shadow: 0 0 0 10px rgba(var(--color-icon-client-rgb), 0); } 100% { box-shadow: 0 0 0 0 rgba(var(--color-icon-client-rgb), 0); } }
+.icon-client-due { animation: pulse-client 1.5s infinite; }
+
+/* Icon Color Styles */
+.icon-bright { border-color: var(--color-icon-bright); }
+.icon-bright svg { stroke: var(--color-icon-bright); }
+
+.icon-faded { border-color: var(--color-icon-faded); }
+.icon-faded svg { stroke: var(--color-icon-faded); }
+
+.icon-client { border-color: var(--color-icon-client); }
+.icon-client svg { stroke: var(--color-icon-client); }
+
+.icon-client-due { border-color: var(--color-icon-client); }
+.icon-client-due svg { stroke: var(--color-icon-client); }
+
+.icon-permit { border-color: var(--color-icon-permit); }
+.icon-permit svg { stroke: var(--color-icon-permit); }
+
+.icon-news { border-color: var(--color-icon-news); }
+.icon-news svg { stroke: var(--color-icon-news); }
+
+.icon-residential-good { border-color: var(--color-icon-residential-good); }
+.icon-residential-good svg { stroke: var(--color-icon-residential-good); }
+
+.icon-residential-worn { border-color: var(--color-icon-residential-worn); }
+.icon-residential-worn svg { stroke: var(--color-icon-residential-worn); }
+
+/* Custom Popup Styles */
+.leaflet-popup-content-wrapper { background: transparent; box-shadow: none; border: none; padding: 0; }
+.leaflet-popup-content { margin: 0; width: auto !important; }
+.leaflet-popup-tip-container { display: none; }
+.leaflet-container a.leaflet-popup-close-button {
+    position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 18px; line-height: 1; color: var(--color-slate-400); background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(2px); border-radius: 9999px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); text-decoration: none; transition: all 0.2s ease-in-out;
+}
+.leaflet-container a.leaflet-popup-close-button:hover { color: var(--color-slate-800); background: white; }
+
+/* --- Component: Residential Prospecting --- */
+@keyframes radar-sweep {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+.radar-scanner {
+    position: absolute; top: 50%; left: 50%; width: 200%; padding-bottom: 200%; height: 0; margin-left: -100%; margin-top: -100%; transform-origin: 50% 50%; pointer-events: none; animation: radar-sweep 5s linear infinite; z-index: 450;
+}
+.radar-scanner::before {
+    content: ''; position: absolute; top: 0; left: 50%; width: 50%; height: 100%; background: linear-gradient(to right, rgba(var(--color-primary-rgb), 0.1) 0%, rgba(var(--color-primary-rgb), 0.5) 95%, rgba(var(--color-primary-rgb), 0.6) 100%); transform-origin: 0% 0%;
+}
+.radar-grid {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background-image:
+        linear-gradient(rgba(var(--color-primary-rgb), 0.15) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(var(--color-primary-rgb), 0.15) 1px, transparent 1px),
+        repeating-radial-gradient(circle at center, rgba(var(--color-primary-rgb), 0.15), rgba(var(--color-primary-rgb), 0.15) 1px, transparent 1px, transparent 20%);
+    background-size: 50px 50px, 50px 50px, 100% 100%;
+}
+
+/* --- UI Patterns: Status Pills, Skeletons, Tooltips --- */
+.status-pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+.status-New { background-color: var(--color-status-new-bg); color: var(--color-status-new-text); }
+.status-Contacted { background-color: var(--color-status-contacted-bg); color: var(--color-status-contacted-text); }
+.status-Proposal-Sent { background-color: var(--color-status-proposal-bg); color: var(--color-status-proposal-text); }
+.status-Not-Interested { background-color: var(--color-status-not-interested-bg); color: var(--color-status-not-interested-text); }
+
+@keyframes shimmer {
+    0% { background-position: -1000px 0; }
+    100% { background-position: 1000px 0; }
+}
+.shimmer-wrapper { animation: shimmer 2s infinite linear; background: linear-gradient(to right, var(--color-skeleton-highlight) 4%, var(--color-skeleton-base) 25%, var(--color-skeleton-highlight) 36%); background-size: 1000px 100%; }
+.skeleton { background-color: var(--color-skeleton-base); }
+
+.tooltip-box::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: var(--color-slate-800) transparent transparent transparent;
+}
