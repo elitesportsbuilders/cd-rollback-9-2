@@ -11,6 +11,9 @@ export default defineConfig(({ mode }) => {
   // The global `process` object is available in the Node.js environment where this config is executed.
   const env = loadEnv(mode, cwd(), '');
   return {
+    server: {
+      host: true, // Listen on all public IPs
+    },
     plugins: [vue()],
     resolve: {
       alias: {
