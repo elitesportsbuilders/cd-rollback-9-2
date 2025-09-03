@@ -1,18 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, reactive, watch, onMounted } from 'vue';
+import { ref, computed, reactive, watch, onMounted, defineAsyncComponent } from 'vue';
 import Sidebar from '@/components/Sidebar.vue';
-import Dashboard from '@/components/Dashboard.vue';
-import InteractiveMap from '@/components/InteractiveMap.vue';
-import Reports from '@/components/Reports.vue';
-import Settings from '@/components/Settings.vue';
-import AiInspection from '@/components/AiInspection.vue';
-import LeadIntelligence from '@/components/LeadIntelligence.vue';
-import CompetitorIntel from '@/components/CompetitorIntel.vue';
-import MyIntel from '@/components/MyIntel.vue';
-import Integrations from '@/components/Integrations.vue';
-import PipedriveAuth from '@/components/PipedriveAuth.vue';
-import ResidentialProspecting from '@/components/ResidentialProspecting.vue';
-import MonthlyReport from '@/components/MonthlyReport.vue';
 import { View } from '@/types';
 import { ALL_PROSPECTS, COMPETITORS, USER_INTEL_DATA } from '@/data';
 
@@ -23,18 +11,18 @@ onMounted(() => {
 });
 
 const viewMap: Record<string, any> = {
-  [View.Dashboard]: Dashboard,
-  [View.LeadIntelligence]: LeadIntelligence,
-  [View.CompetitorIntel]: CompetitorIntel,
-  [View.MyIntel]: MyIntel,
-  [View.ResidentialProspecting]: ResidentialProspecting,
-  [View.InteractiveMap]: InteractiveMap,
-  [View.Reports]: Reports,
-  [View.Settings]: Settings,
-  [View.AiInspection]: AiInspection,
-  [View.Integrations]: Integrations,
-  [View.PipedriveAuth]: PipedriveAuth,
-  [View.MonthlyReport]: MonthlyReport,
+  [View.Dashboard]: defineAsyncComponent(() => import('@/components/Dashboard.vue')),
+  [View.LeadIntelligence]: defineAsyncComponent(() => import('@/components/LeadIntelligence.vue')),
+  [View.CompetitorIntel]: defineAsyncComponent(() => import('@/components/CompetitorIntel.vue')),
+  [View.MyIntel]: defineAsyncComponent(() => import('@/components/MyIntel.vue')),
+  [View.ResidentialProspecting]: defineAsyncComponent(() => import('@/components/ResidentialProspecting.vue')),
+  [View.InteractiveMap]: defineAsyncComponent(() => import('@/components/InteractiveMap.vue')),
+  [View.Reports]: defineAsyncComponent(() => import('@/components/Reports.vue')),
+  [View.Settings]: defineAsyncComponent(() => import('@/components/Settings.vue')),
+  [View.AiInspection]: defineAsyncComponent(() => import('@/components/AiInspection.vue')),
+  [View.Integrations]: defineAsyncComponent(() => import('@/components/Integrations.vue')),
+  [View.PipedriveAuth]: defineAsyncComponent(() => import('@/components/PipedriveAuth.vue')),
+  [View.MonthlyReport]: defineAsyncComponent(() => import('@/components/MonthlyReport.vue')),
 };
 
 function isLead(item: any) {
@@ -129,7 +117,7 @@ const setIntegrationState = (newState: any) => {
 };
 
 const currentComponent = computed(() => {
-  return viewMap[appState.currentView] || Dashboard;
+  return viewMap[appState.currentView] || defineAsyncComponent(() => import('@/components/Dashboard.vue'));
 });
 
 const componentProps = computed(() => {

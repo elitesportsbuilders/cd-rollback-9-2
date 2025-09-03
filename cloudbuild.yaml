@@ -1,0 +1,34 @@
+steps:
+# Step 1: Build the container image
+# This step uses the Docker builder to build the image.
+# The '-t' flag tags the image with a name that includes the project ID and commit SHA.
+# These variables ($PROJECT_ID, $COMMIT_SHA) are provided by Cloud Build at build time.
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'gcr.io/$PROJECT_ID/court-detector-saas:$COMMIT_SHA', '.']
+
+# Step 2: Push the container image to Google Container Registry (GCR)
+# This step pushes the tagged image to GCR, making it available for deployment.
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'gcr.io/$PROJECT_ID/court-detector-saas:$COMMIT_SHA']
+
+# Step 3: Deploy the container image to Cloud Run
+# This step uses the gcloud builder to deploy the image to a Cloud Run service.
+- name: 'gcr.io/cloud-builders/gcloud'
+  args:
+    - 'run'
+    - 'deploy'
+    - 'court-detector-saas' # This will be the name of your Cloud Run service
+    - '--image'
+    - 'gcr.io/$PROJECT_ID/court-detector-saas:$COMMIT_SHA'
+    - '--region'
+    - 'us-central1' # IMPORTANT: Change this to your preferred Cloud Run region
+    - '--platform'
+    - 'managed' # Use the fully managed version of Cloud Run
+    - '--allow-unauthenticated' # Make the service publicly accessible
+    - '--port'
+    - '4173' # Specify the port your application listens on, as defined in the Dockerfile
+
+# This specifies the images that are built by this pipeline.
+# This is useful for tracking build artifacts.
+images:
+  - 'gcr.io/$PROJECT_ID/court-detector-saas:$COMMIT_SHA'
