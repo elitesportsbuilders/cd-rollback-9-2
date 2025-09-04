@@ -1,25 +1,27 @@
 # Use an official Node.js runtime as a parent image
-FROM node:20
+# Check Docker Hub for the exact tag for 22.12.0 if it exists,
+# otherwise, '22' or '22-slim' is more common for the latest patch of Node 22.
+FROM node:22.12.0-slim # Or node:22, node:22-alpine, etc. depending on your needs
 
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy package.json and package-lock.json to the working directory
+# Copy package.json and package-lock.json to install dependencies
 COPY package*.json ./
 
-# Install project dependencies
+# Install application dependencies
 RUN npm install
 
-# Copy the rest of the application's source code from your host to your image filesystem.
+# Copy the rest of your application code
 COPY . .
 
-# Build the application
-RUN npm run build
+# Build your application (if it's a TypeScript/frontend project)
+# Example for a frontend build
+# RUN npm run build
 
-# The 'vite preview' command will start a server to preview the build.
-# It's not recommended for production but good for a simple setup.
-# The default port for vite preview is 4173.
+# Expose the port your app listens on (must match the --port in cloudbuild.yaml)
 EXPOSE 4173
 
-# Command to run the app
-CMD ["npm", "run", "preview"]
+# Define the command to run your app
+CMD ["npm", "start"]
+
