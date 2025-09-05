@@ -41,57 +41,9 @@ const PopupContent = {
         };
     },
     template: `
-        <div v-if="isLead(item)" class="bg-white rounded-lg shadow-xl p-3" style="width: 280px">
-            <div class="flex items-center justify-between mb-2">
-                <div class="flex items-center">
-                    <i :data-lucide="item.type === 'permit' ? 'file-text' : 'newspaper'" class="w-5 h-5 mr-2" :class="item.type === 'permit' ? 'text-violet-600' : 'text-sky-600'"></i>
-                    <span class="text-xs font-bold uppercase" :class="item.type === 'permit' ? 'text-violet-600' : 'text-sky-600'">{{item.type}} Lead</span>
-                </div>
-                <span v-if="item.isSynced" class="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full flex items-center">
-                    <i data-lucide="check-circle-2" class="w-3 h-3 mr-1 text-green-500"></i>Synced
-                </span>
-            </div>
-            <h3 class="font-bold text-lg -mt-1">{{item.name}}</h3>
-            <div class="my-2 p-2 bg-slate-50 rounded-md border border-slate-200">
-                <div class="flex justify-between items-center">
-                    <span class="text-sm font-semibold text-slate-600">AI Qualification</span>
-                    <span class="font-bold text-lg text-indigo-600">{{item.aiScore || 'N/A'}}/10</span>
-                </div>
-                <p class="text-xs text-slate-500 italic mt-1">{{item.aiSummary || 'No summary available.'}}</p>
-            </div>
-            <div class="space-y-1 text-xs">
-                <div v-if="item.details?.contractor" class="flex justify-between">
-                    <span class="text-slate-500">Winning Contractor:</span>
-                    <span class="font-medium text-slate-700">{{item.details.contractor}}</span>
-                </div>
-                <div v-for="([key, value]) in Object.entries(item.extractedData)" :key="key" class="flex justify-between">
-                    <span class="text-slate-500">{{key}}:</span>
-                    <span class="font-medium text-slate-700">{{value}}</span>
-                </div>
-            </div>
-            <div class="mt-3 pt-3 border-t flex justify-around">
-                <button title="Send to Pipedrive" class="text-slate-600 hover:text-indigo-600 disabled:text-slate-300" :disabled="item.isSynced" @click="onSyncLead(item.id)">
-                    <i data-lucide="send" class="w-5 h-5"></i>
-                </button>
-                <button title="Add to Watchlist" class="text-slate-600 hover:text-indigo-600"><i data-lucide="star" class="w-5 h-5"></i></button>
-                <button title="Create Report" class="text-slate-600 hover:text-indigo-600"><i data-lucide="file-text" class="w-5 h-5"></i></button>
-            </div>
-        </div>
-
-        <div v-else-if="isCourt(item)" class="bg-white rounded-lg shadow-xl p-3" style="width: 280px">
+        <div class="bg-white rounded-lg shadow-xl p-3" style="width: 280px">
             <h3 class="font-bold text-lg">{{item.name}}</h3>
-            <p class="text-sm text-slate-500 capitalize">{{item.type}}</p>
-            <div v-if="item.conditions && item.conditions.length > 0" class="mt-2 text-sm text-red-700 bg-red-50 p-2 rounded-md border border-red-200">
-                <p class="font-bold flex items-center mb-1 text-red-800"><i data-lucide="alert-triangle" class="w-4 h-4 mr-1.5"></i>Reported Issues</p>
-                <ul class="list-disc list-inside pl-2 space-y-0.5 text-xs text-red-900">
-                    <li v-for="(condition, index) in item.conditions" :key="index">{{ condition }}</li>
-                </ul>
-            </div>
-            <div class="mt-3 pt-3 border-t flex justify-around">
-                 <button title="Create Report" class="text-slate-600 hover:text-indigo-600"><i data-lucide="file-text" class="w-5 h-5"></i></button>
-                 <button title="Add to Watchlist" class="text-slate-600 hover:text-indigo-600"><i data-lucide="star" class="w-5 h-5"></i></button>
-                 <button title="Get Directions" class="text-slate-600 hover:text-indigo-600"><i data-lucide="navigation" class="w-5 h-5"></i></button>
-            </div>
+            <p>This is a test popup.</p>
         </div>
     `
 };
