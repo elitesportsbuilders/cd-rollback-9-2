@@ -26,7 +26,7 @@ steps:
     - 'managed' # Use the fully managed version of Cloud Run
     - '--allow-unauthenticated' # Make the service publicly accessible
     - '--port'
-    - '4173' # Specify the port your application listens on, as defined in the Dockerfile
+    - '8080' # Specify the port your application listens on, as defined in the Dockerfile
 
 # This specifies the images that are built by this pipeline.
 # This is useful for tracking build artifacts.

@@ -1,7 +1,5 @@
 # Use an official Node.js runtime as a parent image
-# Check Docker Hub for the exact tag for 22.12.0 if it exists,
-# otherwise, '22' or '22-slim' is more common for the latest patch of Node 22.
-FROM node:22.12.0-slim # Or node:22, node:22-alpine, etc. depending on your needs
+FROM node:22-slim
 
 # Set the working directory in the container
 WORKDIR /app
@@ -16,12 +14,10 @@ RUN npm install
 COPY . .
 
 # Build your application (if it's a TypeScript/frontend project)
-# Example for a frontend build
-# RUN npm run build
+RUN npm run build
 
 # Expose the port your app listens on (must match the --port in cloudbuild.yaml)
-EXPOSE 4173
+EXPOSE 8080
 
 # Define the command to run your app
 CMD ["npm", "start"]
-
