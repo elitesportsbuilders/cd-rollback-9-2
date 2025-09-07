@@ -1,118 +1,147 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { GoogleGenAI } from "@google/genai";
-import Card from '@/components/Card.vue';
-import PrimaryButton from '@/components/PrimaryButton.vue';
-import { logAiStudioCode } from '@/utils/devtools';
+import { 
+    User, 
+    Plus, 
+    Sparkles,
+    Loader,
+    Building2,
+    Lightbulb
+} from 'lucide-vue-next';
 
-const props = defineProps<{ userIntel: any[] }>();
+const props = defineProps<{
+  userIntel: any[];
+}>();
+
 const emit = defineEmits(['addIntel']);
 
-const newNote = ref('');
-const summary = ref('');
+const newIntelNote = ref('');
+const newIntelType = ref('Site Visit');
 const isSummarizing = ref(false);
-const codeLogged = ref(false);
+const summaryError = ref('');
 
-const handleAddNote = () => {
-    if (newNote.value.trim()) {
-        emit('addIntel', {
-            date: new Date().toLocaleDateString(),
-            content: newNote.value.trim(),
-        });
-        newNote.value = '';
-    }
+const handleAddIntel = () => {
+  if (newIntelNote.value.trim()) {
+    emit('addIntel', {
+      type: newIntelType.value,
+      note: newIntelNote.value.trim(),
+      date: new Date().toLocaleDateString(),
+    });
+    newIntelNote.value = '';
+    newIntelType.value = 'Site Visit';
+  }
 };
 
 const handleSummarize = async () => {
-    if (props.userIntel.length === 0) return;
-    isSummarizing.value = true;
-    summary.value = '';
-    codeLogged.value = false;
-    
-    try {
-        // The Gemini API key is managed by Vite's `define` config in `vite.config.ts`, 
-        // which makes `process.env.API_KEY` available in the client-side code.
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        
-        const allNotes = props.userIntel.map(note => note.content).join('\\n\\n');
-        const prompt = `Summarize the following notes from a court construction contractor:\\n\\n${allNotes}`;
-        
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-        });
+  if (!newIntelNote.value.trim()) {
+    summaryError.value = 'Please enter some notes to summarize.';
+    return;
+  }
+  isSummarizing.value = true;
+  summaryError.value = '';
+  
+  const userPrompt = `Summarize the following notes from a sports construction site visit into a concise, professional paragraph:\n\n---\n${newIntelNote.value}\n---`;
+  
+  // In this environment, the API key is injected at runtime.
+  // We leave it as an empty string.
+  const apiKey = "";
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
 
-        summary.value = response.text;
-        
-        // Log the code snippet to the console for developers
-        logAiStudioCode(prompt);
-        codeLogged.value = true;
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: userPrompt }] }]
+      })
+    });
 
-    } catch (e) {
-        console.error("Gemini API Error:", e);
-        summary.value = "Error summarizing notes. Using mock data instead: Key themes include following up with Paradise Valley leads, noting competitor 'Asphalt Aces' is bidding low on projects, and a reminder to order new materials for the upcoming school district job.";
-    } finally {
-        isSummarizing.value = false;
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.status} ${response.statusText}`);
     }
+
+    const result = await response.json();
+    const summary = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (summary) {
+      newIntelNote.value = summary;
+    } else {
+      throw new Error("No summary was returned from the API.");
+    }
+  } catch (error) {
+    console.error('Gemini API Error:', error);
+    summaryError.value = "Could not summarize notes. Please try again.";
+  } finally {
+    isSummarizing.value = false;
+  }
 };
+
 </script>
 
 <template>
-    <main class="flex-1 overflow-y-auto p-6 md:p-8">
-        <header class="mb-8">
-            <h2 class="text-3xl font-extrabold text-slate-800">My Intel</h2>
-            <p class="text-slate-500 mt-1">Your private notepad for market observations, reminders, and insights.</p>
+    <div class="flex-1 overflow-y-auto bg-slate-50 p-6">
+        <header class="mb-6">
+            <h1 class="text-3xl font-bold text-slate-800 flex items-center">
+                <User class="w-8 h-8 mr-3 text-indigo-600" />
+                My Intelligence
+            </h1>
+            <p class="mt-1 text-slate-600">Add your own notes, site visit summaries, and other intel.</p>
         </header>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div class="lg:col-span-2 space-y-6">
-                <Card>
-                    <h3 class="text-xl font-bold text-slate-700 mb-4">Add a New Note</h3>
-                    <textarea
-                        v-model="newNote"
-                        rows="4"
-                        class="block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                        placeholder="e.g., Saw Asphalt Aces trucks near the new Scottsdale development..."
-                    ></textarea>
-                    <div class="mt-4 text-right">
-                        <PrimaryButton @click="handleAddNote" label="Save Note" icon="plus" />
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Add New Intel Form -->
+            <div class="lg:col-span-1 bg-white p-6 rounded-lg shadow-md border border-slate-200">
+                <h2 class="text-xl font-bold text-slate-800 flex items-center mb-4">
+                    <Plus class="w-6 h-6 mr-2 text-slate-500" />
+                    Add New Intel
+                </h2>
+                <form @submit.prevent="handleAddIntel" class="space-y-4">
+                    <div>
+                        <label for="intel-type" class="block text-sm font-medium text-slate-700">Intel Type</label>
+                        <select id="intel-type" v-model="newIntelType" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                            <option>Site Visit</option>
+                            <option>Client Meeting</option>
+                            <option>Competitor Sighting</option>
+                            <option>General Note</option>
+                        </select>
                     </div>
-                </Card>
-                <Card>
-                    <h3 class="text-xl font-bold text-slate-700 mb-4">Intel Feed</h3>
-                    <div v-if="userIntel.length > 0" class="space-y-4">
-                        <div v-for="note in userIntel" :key="note.id" class="p-4 bg-slate-50 border border-slate-200 rounded-lg">
-                            <p class="text-xs text-slate-500 font-semibold">{{ note.date }}</p>
-                            <p class="text-sm text-slate-700 mt-1 whitespace-pre-wrap">{{ note.content }}</p>
+                    <div>
+                        <label for="intel-note" class="block text-sm font-medium text-slate-700">Notes</label>
+                        <div class="relative">
+                            <textarea id="intel-note" v-model="newIntelNote" rows="8" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="e.g., Visited Scottsdale Ranch Park. Court 3 has significant cracking..."></textarea>
+                            <button @click.prevent="handleSummarize" :disabled="isSummarizing || !newIntelNote" type="button" class="absolute bottom-2 right-2 flex items-center justify-center text-xs font-semibold bg-indigo-100 text-indigo-700 px-2 py-1 rounded-md hover:bg-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <Sparkles v-if="!isSummarizing" class="w-4 h-4 mr-1.5" />
+                                <Loader v-else class="w-4 h-4 mr-1.5 animate-spin" />
+                                Summarize w/ AI
+                            </button>
                         </div>
+                         <p v-if="summaryError" class="mt-2 text-xs text-red-600">{{ summaryError }}</p>
                     </div>
-                    <div v-else class="text-center text-slate-500 py-8">
-                        <i data-lucide="file-text" class="w-12 h-12 mx-auto text-slate-400"></i>
-                        <p class="mt-2">No notes yet. Add your first piece of intel!</p>
+                    <div>
+                        <button type="submit" class="w-full bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                            Add Intel
+                        </button>
                     </div>
-                </Card>
+                </form>
             </div>
-            <div>
-                <Card>
-                    <h3 class="text-xl font-bold text-slate-700 mb-4">AI Summary</h3>
-                    <PrimaryButton
-                        @click="handleSummarize"
-                        :is-loading="isSummarizing"
-                        :disabled="userIntel.length === 0"
-                        label="Summarize All Notes"
-                        icon="sparkles"
-                        class="w-full"
-                    />
-                    <div class="mt-4 p-4 bg-slate-100 rounded-lg border border-slate-200 min-h-[150px]">
-                        <p v-if="summary" class="text-sm text-slate-700 italic whitespace-pre-wrap">{{ summary }}</p>
-                        <p v-else-if="!isSummarizing" class="text-sm text-slate-500">Click the button to generate a summary of your notes with Gemini.</p>
+            
+            <!-- Intel Feed -->
+            <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow-md border border-slate-200">
+                <h2 class="text-xl font-bold text-slate-800 mb-4">Your Intel Feed</h2>
+                <div class="space-y-4 max-h-[70vh] overflow-y-auto">
+                    <div v-for="intel in userIntel" :key="intel.id" class="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                        <div class="flex items-center justify-between mb-2">
+                            <p class="font-bold text-slate-800 flex items-center">
+                                <Building2 v-if="intel.type === 'Site Visit'" class="w-4 h-4 mr-2 text-slate-500" />
+                                <Lightbulb v-else class="w-4 h-4 mr-2 text-slate-500" />
+                                {{ intel.type }}
+                            </p>
+                            <p class="text-xs text-slate-500">{{ intel.date }}</p>
+                        </div>
+                        <p class="text-sm text-slate-600 whitespace-pre-wrap">{{ intel.note }}</p>
                     </div>
-                    <div v-if="codeLogged" class="mt-2 text-center text-xs text-slate-500 animate-fade-in flex items-center justify-center gap-2">
-                        <i data-lucide="terminal" class="w-3 h-3"></i>
-                        <span>AI Studio code snippet logged to DevTools console.</span>
-                    </div>
-                </Card>
+                </div>
             </div>
         </div>
-    </main>
+    </div>
 </template>
