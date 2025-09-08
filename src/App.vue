@@ -8,7 +8,7 @@ import Sidebar from '@/components/Sidebar.vue';
 import { View } from '@/types';
 import { ALL_PROSPECTS, COMPETITORS, USER_INTEL_DATA } from '@/data';
 
-// --- 2. FIREBASE IMPORTS (Auth added) ---
+// --- 2. FIREBASE IMPORTS ---
 import { initializeApp, FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getAuth, signInWithCustomToken, signInAnonymously, Auth } from 'firebase/auth';
@@ -109,7 +109,7 @@ const loadInitialState = (): AppState => {
     currentView: View.Dashboard,
     integrationState: { isPipedriveConnected: false },
     prospects: ALL_PROSPECTS,
-    trackedCompetitors: COMPETITORS.slice(0, 3),
+    trackedCompetitors: COMPETITORS,
     userIntel: USER_INTEL_DATA,
   };
 };
@@ -175,7 +175,6 @@ const currentComponent = computed(() => {
   return viewMap[appState.currentView] || defineAsyncComponent(() => import('@/components/Dashboard.vue'));
 });
 
-// --- UPDATED componentProps with conditional logic ---
 const componentProps = computed(() => {
   switch (appState.currentView) {
     case View.LeadIntelligence:
@@ -183,13 +182,14 @@ const componentProps = computed(() => {
     case View.ResidentialProspecting:
       return { prospects: appState.prospects };
     case View.InteractiveMap:
-      return isFirebaseConnected.value
+      return isFirebaseConnected.value 
         ? { focusedProspectId: focusedProspectId.value, db: db.value, appId: appId.value }
         : { focusedProspectId: focusedProspectId.value, prospects: appState.prospects };
     case View.Integrations:
       return { isConnected: appState.integrationState.isPipedriveConnected };
     case View.CompetitorIntel:
-      return { trackedCompetitors: appState.trackedCompetitors };
+      // --- FIX: The new dashboard needs the trackedCompetitors list for the 'Activity' tab ---
+      return { trackedCompetitors: appState.trackedCompetitors }; 
     case View.MyIntel:
       return { userIntel: appState.userIntel };
     case View.MonthlyReport:
@@ -209,7 +209,7 @@ const pageTitle = computed(() => {
 
 const mainContentClass = computed(() => {
     const isFullBleed = [View.InteractiveMap, View.ResidentialProspecting].includes(appState.currentView as any);
-    return isFullBleed ? 'flex-1 min-h-0' : 'flex-1 overflow-y-auto';
+    return isFullBleed ? 'flex-1 flex flex-col min-h-0' : 'flex-1 overflow-y-auto';
 });
 </script>
 
@@ -223,7 +223,7 @@ const mainContentClass = computed(() => {
         
         <div v-if="isSidebarOpen" @click="isSidebarOpen = false" class="fixed inset-0 bg-black bg-opacity-50 z-20 md:hidden"></div>
         
-        <div class="flex-1 flex flex-col min-w-0">
+        <main class="flex-1 flex flex-col min-w-0">
             <header class="md:hidden flex justify-between items-center p-4 bg-white border-b border-slate-200 sticky top-0 z-10">
                 <button @click="isSidebarOpen = true" class="text-slate-600 p-1 -ml-1">
                     <Menu class="w-6 h-6" />
@@ -247,8 +247,9 @@ const mainContentClass = computed(() => {
               @add-prospect="handleAddProspect"
               @remove-prospect="handleRemoveProspect"
             />
-        </div>
+        </main>
     </div>
+    
     <div v-else class="flex items-center justify-center min-h-screen bg-slate-100">
         <div class="text-center">
             <svg class="animate-spin h-8 w-8 text-indigo-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
