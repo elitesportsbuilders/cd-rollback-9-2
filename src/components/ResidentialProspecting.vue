@@ -1,16 +1,35 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, computed, watch, reactive } from 'vue';
+import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue';
 import { View } from '@/types';
 import PrimaryButton from '@/components/PrimaryButton.vue';
 import L from 'leaflet';
 import 'leaflet-draw';
-import { createIcons } from 'lucide';
+import { createIcons, icons } from 'lucide';
 
 const props = defineProps<{
   prospects: any[];
 }>();
 
 const emit = defineEmits(['setCurrentView', 'addProspect', 'removeProspect']);
+
+// --- Types ---
+type ProspectStatus = 'New' | 'Contacted' | 'Interested' | 'Not Interested';
+type ScanStatus = 'idle' | 'scanning' | 'complete';
+type ScanMethod = 'view' | 'draw';
+
+interface Prospect {
+  id: number;
+  type: 'residential';
+  coords: [number, number];
+  name: string;
+  homeowner: string;
+  address: string;
+  courtType: string;
+  conditionScore: number;
+  status: ProspectStatus | 'good' | 'worn'; // Expanded to handle mock data status
+  aiSummary: string;
+  notes?: string;
+}
 
 // Mock data generation functions
 const FIRST_NAMES = ['John', 'Jane', 'Robert', 'Emily', 'Michael', 'Sarah', 'David', 'Jessica'];
@@ -19,7 +38,7 @@ const STREET_NAMES = ['Ocotillo', 'Mesquite', 'Palo Verde', 'Saguaro', 'Cholla',
 const STREET_TYPES = ['Rd', 'Ln', 'Dr', 'Ct', 'Ave', 'Way'];
 const COURT_TYPES = ['Tennis', 'Pickleball', 'Basketball'];
 
-// Point-in-polygon check using ray-casting algorithm
+// Point-in-polygon check
 const isPointInPolygon = (point: [number, number], vs: [number, number][]) => {
     const x = point[0], y = point[1];
     let inside = false;
@@ -33,10 +52,10 @@ const isPointInPolygon = (point: [number, number], vs: [number, number][]) => {
     return inside;
 };
 
-// Generate mock prospects within map bounds or a custom polygon
-const generateMockProspects = (bounds: any, polygonGeoJSON: any = null) => {
-    const numResults = Math.floor(Math.random() * 8) + 5; // 5 to 12 results
-    const prospects = [];
+// Generate mock prospects
+const generateMockProspects = (bounds: any, polygonGeoJSON: any = null): Prospect[] => {
+    const numResults = Math.floor(Math.random() * 8) + 5;
+    const prospects: Prospect[] = [];
     const sw = bounds.getSouthWest();
     const ne = bounds.getNorthEast();
     const latRange = ne.lat - sw.lat;
@@ -45,11 +64,10 @@ const generateMockProspects = (bounds: any, polygonGeoJSON: any = null) => {
 
     for (let i = 0; i < numResults; i++) {
         let lat, lng;
-        
+        let pointInPolygon = !polygonVertices;
         if (polygonVertices) {
-            let pointInPolygon = false;
             let attempts = 0;
-            while (!pointInPolygon && attempts < 100) { // Limit attempts to prevent infinite loop
+            while (!pointInPolygon && attempts < 100) {
                 lat = sw.lat + Math.random() * latRange;
                 lng = sw.lng + Math.random() * lngRange;
                 if (isPointInPolygon([lng, lat], polygonVertices)) {
@@ -57,52 +75,55 @@ const generateMockProspects = (bounds: any, polygonGeoJSON: any = null) => {
                 }
                 attempts++;
             }
-            if (!pointInPolygon) continue; // Skip if we can't find a point in time
         } else {
             lat = sw.lat + Math.random() * latRange;
             lng = sw.lng + Math.random() * lngRange;
         }
 
-        const lastName = LAST_NAMES[Math.floor(Math.random() * LAST_NAMES.length)];
-        const streetName = STREET_NAMES[Math.floor(Math.random() * STREET_NAMES.length)];
-        const streetType = STREET_TYPES[Math.floor(Math.random() * STREET_TYPES.length)];
-        const courtType = COURT_TYPES[Math.floor(Math.random() * COURT_TYPES.length)];
-        
-        const conditionScore = parseFloat((Math.random() * 5 + 4.5).toFixed(1)); // 4.5 to 9.5
-        const status = conditionScore > 7.0 ? 'good' : 'worn';
-        const aiSummary = status === 'good'
-            ? `Well-maintained ${courtType.toLowerCase()} court on a large property.`
-            : `Visible wear and fading on the ${courtType.toLowerCase()} court surface. High potential for a resurfacing lead.`;
+        if (pointInPolygon) {
+            const lastName = LAST_NAMES[Math.floor(Math.random() * LAST_NAMES.length)];
+            const streetName = STREET_NAMES[Math.floor(Math.random() * STREET_NAMES.length)];
+            const streetType = STREET_TYPES[Math.floor(Math.random() * STREET_TYPES.length)];
+            const courtType = COURT_TYPES[Math.floor(Math.random() * COURT_TYPES.length)];
+            
+            const conditionScore = parseFloat((Math.random() * 5 + 4.5).toFixed(1));
+            const status = conditionScore > 7.0 ? 'good' : 'worn';
+            const aiSummary = status === 'good'
+                ? `Well-maintained ${courtType.toLowerCase()} court on a large property.`
+                : `Visible wear and fading on the ${courtType.toLowerCase()} court surface. High potential for a resurfacing lead.`;
 
-        prospects.push({
-            id: 500 + i + Math.floor(Math.random() * 1000),
-            type: 'residential',
-            coords: [lat, lng],
-            name: `${lastName} Residence`,
-            homeowner: `${FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)]} ${lastName}`,
-            address: `${Math.floor(Math.random() * 9000) + 1000} W ${streetName} ${streetType}, Paradise Valley, AZ`,
-            courtType: courtType,
-            conditionScore: conditionScore,
-            status: status,
-            aiSummary: aiSummary,
-        });
+            prospects.push({
+                id: 500 + i + Math.floor(Math.random() * 1000),
+                type: 'residential',
+                coords: [lat, lng],
+                name: `${lastName} Residence`,
+                homeowner: `${FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)]} ${lastName}`,
+                address: `${Math.floor(Math.random() * 9000) + 1000} W ${streetName} ${streetType}, Paradise Valley, AZ`,
+                courtType: courtType,
+                conditionScore: conditionScore,
+                status: status,
+                aiSummary: aiSummary,
+            });
+        }
     }
     return prospects;
 };
 
+
+// --- Refs & State ---
 const mapContainerRef = ref(null);
-let map: any = null;
-let markerLayer: any = null;
-let drawnItems: any = null;
+let map: L.Map | null = null;
+let markerLayer: L.LayerGroup | null = null;
+let drawnItems: L.FeatureGroup | null = null;
 let drawControl: any = null;
-let markerRefs: { [key: number]: any } = {};
+let markerRefs: { [key: number]: L.Marker } = {};
 let resizeObserver: ResizeObserver | null = null;
 
-const scanStatus = ref('idle'); // idle, scanning, complete
-const results = ref<any[]>([]);
-const activeSidebarTab = ref('results'); // 'results' | 'saved'
+const scanStatus = ref<ScanStatus>('idle');
+const results = ref<Prospect[]>([]);
+const activeSidebarTab = ref('results');
 
-const selectedProspect = ref<any>(null);
+const selectedProspect = ref<Prospect | null>(null);
 const isModalOpen = ref(false);
 const isGeneratingEmail = ref(false);
 const generatedEmail = ref('');
@@ -110,7 +131,7 @@ const searchQuery = ref('');
 const highlightedProspectId = ref<number | null>(null);
 
 const drawnAreaGeoJSON = ref<any>(null);
-const scanMethod = ref('view'); // 'view' or 'draw'
+const scanMethod = ref<ScanMethod>('view');
 const isMobilePanelOpen = ref(false);
 
 const savedResidentialProspects = computed(() => props.prospects.filter(p => p.type === 'residential'));
@@ -136,13 +157,12 @@ const handlePrimaryScan = () => {
 };
 
 watch(scanMethod, (newMethod) => {
-    if (newMethod === 'draw') {
+    if (!map) return;
+    if (newMethod === 'draw' && drawControl) {
         map.addControl(drawControl);
         new (L.Draw as any).Polygon(map, drawControl.options.draw.polygon).enable();
-    } else {
-        if (drawControl._map) {
-            drawControl.remove();
-        }
+    } else if (drawControl && drawControl._map) {
+        drawControl.remove();
         clearDrawing();
     }
 });
@@ -151,18 +171,18 @@ const isSaved = (prospectId: number) => {
     return props.prospects.some(p => p.id === prospectId);
 };
 
-const saveProspect = (prospectToSave: any) => {
+const saveProspect = (prospectToSave: Prospect) => {
     if (!isSaved(prospectToSave.id)) {
         const prospectWithStatus = {
             ...prospectToSave,
-            status: 'New', // Default status
-            notes: ''       // Default empty notes
+            status: 'New' as ProspectStatus,
+            notes: ''
         };
         emit('addProspect', prospectWithStatus);
     }
 };
 
-const removeProspect = (prospectId: number) => {
+const removeProspectFromList = (prospectId: number) => {
     emit('removeProspect', prospectId);
     if(selectedProspect.value && selectedProspect.value.id === prospectId) {
         isModalOpen.value = false;
@@ -177,107 +197,90 @@ const onListItemLeave = () => {
     highlightedProspectId.value = null;
 };
 
-// This watcher centralizes the DOM manipulation logic for highlighting markers.
 watch(highlightedProspectId, (newId, oldId) => {
-    if (oldId) {
-        const oldMarker = markerRefs[oldId];
-        if (oldMarker && oldMarker._icon) {
-            L.DomUtil.removeClass(oldMarker._icon, 'map-marker-highlight');
-        }
+    const oldMarkerEl = oldId ? markerRefs[oldId]?.getElement() : undefined;
+    if (oldMarkerEl) {
+        L.DomUtil.removeClass(oldMarkerEl, 'map-marker-highlight');
     }
-    if (newId) {
-        const newMarker = markerRefs[newId];
-        if (newMarker && newMarker._icon) {
-            L.DomUtil.addClass(newMarker._icon, 'map-marker-highlight');
-        }
+
+    const newMarkerEl = newId ? markerRefs[newId]?.getElement() : undefined;
+    if (newMarkerEl) {
+        L.DomUtil.addClass(newMarkerEl, 'map-marker-highlight');
     }
 });
 
+
 watch(isMobilePanelOpen, (isOpen) => {
     if(isOpen) {
-        nextTick(() => createIcons());
+        nextTick(() => createIcons({ icons }));
     }
 });
 
 const handleAddressSearch = () => {
-  const query = searchQuery.value.toLowerCase().trim();
-  if (!query || !map) return;
-
-  let targetCoords: [number, number] = [33.4484, -112.0740];
-  let targetZoom = 12;
-
-  if (query === '85253') {
-      targetCoords = [33.53, -111.95];
-      targetZoom = 14;
-  } else if (query === 'phoenix') {
-      targetCoords = [33.4484, -112.0740];
-      targetZoom = 12;
-  }
-
-  map.flyTo(targetCoords, targetZoom);
-  searchQuery.value = '';
+    const query = searchQuery.value.toLowerCase().trim();
+    if (!map) return;
+    const targetCoords: [number, number] = query === '85253' ? [33.53, -111.95] : [33.4484, -112.0740];
+    const targetZoom = query === '85253' ? 14 : 12;
+    map.flyTo(targetCoords, targetZoom);
+    searchQuery.value = '';
 };
 
 const clearDrawing = () => {
-    drawnItems.clearLayers();
+    if (drawnItems) drawnItems.clearLayers();
     drawnAreaGeoJSON.value = null;
-    if (scanMethod.value === 'draw' && drawControl._map) {
+    if (scanMethod.value === 'draw' && drawControl?._map && map) {
         new (L.Draw as any).Polygon(map, drawControl.options.draw.polygon).enable();
     }
 };
 
-const executeScan = (bounds: any, geojson: any = null) => {
+const executeScan = (bounds: L.LatLngBounds, geojson: any = null) => {
+    const currentMap = map;
+    if (!currentMap) return;
     scanStatus.value = 'scanning';
     results.value = [];
     markerRefs = {};
-    if (markerLayer) {
-      markerLayer.clearLayers();
-    }
+    markerLayer?.clearLayers();
     activeSidebarTab.value = 'results';
 
     const scanDuration = 5000;
     const newProspects = generateMockProspects(bounds, geojson);
-    const centerPoint = map.latLngToContainerPoint(map.getCenter());
+    const centerPoint = currentMap.latLngToContainerPoint(currentMap.getCenter());
 
     const prospectsWithAngles = newProspects.map(prospect => {
-        const prospectPoint = map.latLngToContainerPoint(prospect.coords);
+        const prospectPoint = currentMap.latLngToContainerPoint(prospect.coords);
         const dx = prospectPoint.x - centerPoint.x;
         const dy = prospectPoint.y - centerPoint.y;
-        let angle = Math.atan2(dy, dx) * (180 / Math.PI);
-        angle = (angle + 450) % 360;
-        return { ...prospect, angle };
+        return { ...prospect, angle: (Math.atan2(dy, dx) * (180 / Math.PI) + 450) % 360 };
     }).sort((a, b) => a.angle - b.angle);
 
     prospectsWithAngles.forEach((prospect) => {
-      const revealDelay = (prospect.angle / 360) * scanDuration;
+        const revealDelay = (prospect.angle / 360) * scanDuration;
+        setTimeout(() => {
+            results.value.push(prospect);
+            nextTick(() => {
+                const iconClass = `icon-base map-marker-ping icon-residential-${prospect.status}`;
+                const icon = L.divIcon({ 
+                    className: iconClass,
+                    html: `<i data-lucide="home" class="w-5 h-5" stroke-width="2"></i>`, 
+                    iconSize: [32, 32], iconAnchor: [16, 16]
+                });
+                const marker = L.marker(prospect.coords, { icon: icon });
+                
+                if (markerLayer) markerLayer.addLayer(marker);
 
-      setTimeout(() => {
-        results.value.push(prospect);
-        
-        nextTick(() => {
-          const iconClass = `icon-base map-marker-ping icon-residential-${prospect.status}`;
-          const icon = L.divIcon({ 
-              className: iconClass,
-              html: `<i data-lucide="home" class="w-5 h-5" stroke-width="2"></i>`, 
-              iconSize: [32, 32],
-              iconAnchor: [16, 16]
-          });
-          const marker = L.marker(prospect.coords, { icon: icon }).addTo(markerLayer);
-          markerRefs[prospect.id] = marker;
-          marker.on('click', () => openProspectModal(prospect));
-          marker.on('mouseover', () => {
-              highlightedProspectId.value = prospect.id;
-          });
-          marker.on('mouseout', () => { highlightedProspectId.value = null; });
-          
-          const listEl = document.querySelector(`li[data-prospect-id='${prospect.id}']`);
-          if (listEl) {
-              listEl.classList.remove('opacity-0');
-              listEl.classList.add('animate-fade-in');
-          }
-          createIcons();
-        });
-      }, revealDelay);
+                markerRefs[prospect.id] = marker;
+                marker.on('click', () => openProspectModal(prospect));
+                marker.on('mouseover', () => highlightedProspectId.value = prospect.id);
+                marker.on('mouseout', () => highlightedProspectId.value = null);
+                
+                const listEl = document.querySelector(`li[data-prospect-id='${prospect.id}']`);
+                if (listEl) {
+                    listEl.classList.remove('opacity-0');
+                    listEl.classList.add('animate-fade-in');
+                }
+                createIcons({ icons });
+            });
+        }, revealDelay);
     });
 
     setTimeout(() => {
@@ -286,14 +289,14 @@ const executeScan = (bounds: any, geojson: any = null) => {
 };
 
 const handleScan = () => {
-  if (!map || scanStatus.value === 'scanning') return;
-  map.invalidateSize();
-  const bounds = map.getBounds();
-  if (!bounds || !bounds.isValid() || bounds.getSouthWest().equals(bounds.getNorthEast())) {
-      alert("Could not determine map area to scan. Please try panning the map slightly and scanning again.");
-      return;
-  }
-  executeScan(bounds);
+    if (!map || scanStatus.value === 'scanning') return;
+    map.invalidateSize();
+    const bounds = map.getBounds();
+    if (!bounds?.isValid() || bounds.getSouthWest().equals(bounds.getNorthEast())) {
+        alert("Could not determine map area. Please pan the map slightly and try again.");
+        return;
+    }
+    executeScan(bounds);
 };
 
 const handleScanSelection = () => {
@@ -302,7 +305,7 @@ const handleScanSelection = () => {
     executeScan(layer.getBounds(), drawnAreaGeoJSON.value);
 };
 
-const openProspectModal = (prospect: any) => {
+const openProspectModal = (prospect: Prospect) => {
     const savedVersion = props.prospects.find(p => p.id === prospect.id);
     selectedProspect.value = savedVersion || prospect;
     isModalOpen.value = true;
@@ -314,7 +317,7 @@ const handleGenerateEmail = async () => {
     isGeneratingEmail.value = true;
     generatedEmail.value = '';
     const prospect = selectedProspect.value;
-    console.log("Simulating secure API call to backend endpoint with prospect data:", prospect);
+    console.log("Simulating secure API call to backend for:", prospect);
     setTimeout(() => {
         const mockEmail = `Subject: Regarding Your Property's ${prospect.courtType} Court at ${prospect.address}\n\nDear ${prospect.homeowner},\n\nI hope this email finds you well. My name is Mike, and I represent Elite Sports Builders, a leading local specialist in the installation and resurfacing of high-quality sports courts.\n\nWhile reviewing properties in your area, I noticed your beautiful ${prospect.courtType} court. Based on an initial visual assessment, it appears there may be some opportunities for surface rejuvenation to restore its original color and optimal playing condition.\n\nWe would be happy to provide a complimentary, no-obligation consultation to assess its condition and discuss potential resurfacing options that can protect your investment for years to come. Would you be available for a brief chat sometime next week?\n\nBest regards,\nMike Woelfel\nElite Sports Builders`;
         generatedEmail.value = mockEmail.replace(/\n/g, '<br>');
@@ -322,19 +325,43 @@ const handleGenerateEmail = async () => {
     }, 1500);
 };
 
-const getStatusClass = (status: string) => {
-    const className = status.replace(' Sent', '').replace(' ', '-');
-    return 'status-' + className;
+const getStatusClass = (status: string) => `status-${status.replace(' Sent', '').replace(' ', '-')}`;
+
+const showMyLocation = () => {
+  const currentMap = map;
+  if (navigator.geolocation && currentMap) {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const userLatLng = L.latLng(latitude, longitude);
+        currentMap.flyTo(userLatLng, 16);
+        L.marker(userLatLng).addTo(currentMap).bindPopup("<b>Your Location</b>").openPopup();
+      },
+      (error) => {
+        console.error("Error getting user location:", error.message);
+        alert("Could not retrieve your location.");
+      }
+    );
+  }
 };
 
 onMounted(() => {
-    if (mapContainerRef.value) {
+    if (mapContainerRef.value && !map) {
         map = L.map(mapContainerRef.value, { zoomControl: false }).setView([33.6, -111.95], 13);
         L.control.zoom({ position: 'topright' }).addTo(map);
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+
+        const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
             attribution: 'Tiles &copy; Esri',
             maxZoom: 19
-        }).addTo(map);
+        });
+        const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        });
+        
+        const baseMaps = { "Satellite": satelliteLayer, "Street": streetLayer };
+        satelliteLayer.addTo(map);
+        L.control.layers(baseMaps, undefined, { position: 'topright' }).addTo(map);
+
         markerLayer = L.layerGroup().addTo(map);
         drawnItems = new L.FeatureGroup().addTo(map);
 
@@ -344,28 +371,30 @@ onMounted(() => {
         });
 
         map.on(L.Draw.Event.CREATED, (event: any) => {
-            drawnItems.clearLayers();
-            drawnItems.addLayer(event.layer);
+            if (drawnItems) {
+                drawnItems.clearLayers();
+                drawnItems.addLayer(event.layer);
+            }
             drawnAreaGeoJSON.value = event.layer.toGeoJSON();
         });
 
-        resizeObserver = new ResizeObserver(() => {
-            if (map) {
-                map.invalidateSize({ debounceMoveend: true });
-            }
-        });
+        resizeObserver = new ResizeObserver(() => map?.invalidateSize({ debounceMoveend: true }));
         resizeObserver.observe(mapContainerRef.value);
+
+        nextTick(() => {
+            createIcons({ icons });
+        });
     }
 });
 
 onUnmounted(() => {
-    if (resizeObserver) {
-        resizeObserver.disconnect();
-    }
+    resizeObserver?.disconnect();
     if (map) {
         map.remove();
+        map = null;
     }
 });
+
 </script>
 
 <template>
@@ -383,7 +412,16 @@ onUnmounted(() => {
                 <p class="text-sm">Click points on the map to create a polygon. Click the first point to finish.</p>
             </div>
 
-            <div class="absolute top-4 right-4 z-[500]">
+             <!-- Top-Right Controls -->
+            <div class="absolute top-4 right-4 z-[500] flex items-center gap-2">
+                 <button
+                    @click="showMyLocation"
+                    class="p-3 bg-white border border-slate-300 rounded-lg shadow-lg hover:bg-slate-50"
+                    aria-label="Show my location"
+                    title="Show my location"
+                >
+                    <i data-lucide="locate-fixed" class="w-5 h-5 text-slate-600"></i>
+                </button>
                 <div class="flex items-center">
                     <input 
                         type="text" 
@@ -420,6 +458,25 @@ onUnmounted(() => {
                 </button>
             </div>
             
+             <!-- Legend -->
+            <div v-if="scanStatus === 'complete' && results.length > 0" class="absolute bottom-4 left-4 z-[1000] bg-white p-3 rounded-lg shadow-lg">
+                <h3 class="font-bold mb-2 text-sm text-slate-800">Scan Legend</h3>
+                <div class="space-y-2">
+                    <div class="flex items-center">
+                    <div class="icon-base icon-residential-good w-8 h-8 flex items-center justify-center rounded-full mr-2">
+                        <i data-lucide="home" class="w-4 h-4 text-white"></i>
+                    </div>
+                    <span class="text-slate-700 text-xs">Good Condition</span>
+                    </div>
+                    <div class="flex items-center">
+                    <div class="icon-base icon-residential-worn w-8 h-8 flex items-center justify-center rounded-full mr-2">
+                        <i data-lucide="home" class="w-4 h-4 text-white"></i>
+                    </div>
+                    <span class="text-slate-700 text-xs">Worn Condition</span>
+                    </div>
+                </div>
+            </div>
+
             <!-- Mobile FAB -->
             <div class="md:hidden absolute bottom-4 right-4 z-[500]">
                 <button v-if="scanStatus === 'complete' && results.length > 0" @click="isMobilePanelOpen = true" class="relative bg-indigo-600 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center hover:bg-indigo-700 active:bg-indigo-800 transition-colors">
@@ -637,7 +694,7 @@ onUnmounted(() => {
 
                 <footer class="p-4 bg-slate-50 border-t flex justify-between items-center flex-shrink-0">
                     <div>
-                        <button v-if="isSaved(selectedProspect.id)" @click="removeProspect(selectedProspect.id)" class="text-sm font-semibold text-red-600 hover:text-red-800 flex items-center gap-2">
+                        <button v-if="isSaved(selectedProspect.id)" @click="removeProspectFromList(selectedProspect.id)" class="text-sm font-semibold text-red-600 hover:text-red-800 flex items-center gap-2">
                             <i data-lucide="bookmark-minus" class="w-4 h-4"></i>Remove from Saved
                         </button>
                         <PrimaryButton v-else @click="saveProspect(selectedProspect)" label="Save Prospect" icon="bookmark-plus" />

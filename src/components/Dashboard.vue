@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { Lightbulb, FileText, TrendingUp, Megaphone, Target, Map, Wrench, Sparkles, ChevronRight } from 'lucide-vue-next';
+import { Lightbulb, FileText, TrendingUp, Megaphone, Target, Map, Wrench, Sparkles, ChevronRight, ShieldCheck } from 'lucide-vue-next';
 import { View } from '@/types';
 import { Chart, registerables, ChartEvent, ActiveElement } from 'chart.js';
+import { logAiStudioCode } from '@/utils/devtools';
 
 Chart.register(...registerables);
 
@@ -32,16 +33,15 @@ const generateAiBriefing = async () => {
 
   isBriefingLoading.value = true;
   
-  // Format the most recent activities for the prompt
   const formattedActivities = props.activityFeed
-    .slice(0, 5) // Use the 5 most recent activities
+    .slice(0, 5)
     .map(a => `- ${a.summary} (Source: ${a.source})`)
     .join('\n');
 
   const systemPrompt = "You are a sharp and concise sales analyst for Elite Sports Builders, a company specializing in athletic court construction in Arizona. Your audience is the sales manager, Mike Woelfel.";
   const userPrompt = `Based on the following recent market activities, provide a 2-3 sentence strategic briefing for the morning sales meeting. Focus on the single biggest opportunity and the most urgent threat. Be direct and actionable.\n\nRecent Activities:\n${formattedActivities}`;
   
-  const apiKey = ""; // This will be handled by the execution environment
+  const apiKey = "";
   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
 
   try {
@@ -50,6 +50,8 @@ const generateAiBriefing = async () => {
       systemInstruction: { parts: [{ text: systemPrompt }] },
     };
 
+    logAiStudioCode(userPrompt);
+
     const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -57,7 +59,6 @@ const generateAiBriefing = async () => {
     });
 
     if (!response.ok) {
-        // This will now catch the 403 error
         throw new Error(`API call failed with status: ${response.status}`);
     }
 
@@ -78,7 +79,7 @@ const generateAiBriefing = async () => {
         aiBriefing.value = `[Live AI Briefing Disabled - Showing Example]\n\n${fallbackMessage}`;
     } else {
         console.error("Error generating AI briefing:", error);
-        aiBriefing.value = fallbackMessage; // Use fallback for other errors too
+        aiBriefing.value = fallbackMessage;
     }
   } finally {
     isBriefingLoading.value = false;
@@ -88,6 +89,12 @@ const generateAiBriefing = async () => {
 
 // --- Business Logic for Alerts ---
 const getClientAlertLevel = (project: any): 'resurface' | 'warranty' | 'none' => {
+  // --- DEMO "FALSE FLAG" ---
+  // This line is for demonstration purposes to show how a warranty alert looks.
+  // It forces an alert for a specific client. Remove this line for production logic.
+  if (project.id === 1) return 'warranty';
+  // --- END DEMO ---
+
   if (!project || !project.isClient || !project.completionDate) return 'none';
   const today = new Date('2025-09-08T12:00:00Z');
   const completionDate = new Date(project.completionDate);
@@ -109,7 +116,15 @@ const otherProspects = computed(() => props.prospects.filter(p => !newAiLeads.va
 
 const newAiLeadsCount = computed(() => newAiLeads.value.length);
 const maintenanceAlertsCount = computed(() => clients.value.filter(p => getClientAlertLevel(p) !== 'none').length);
-const totalTrackedItems = computed(() => props.prospects.length);
+
+const priorityAlerts = computed(() => {
+    return clients.value
+        .map(client => ({
+            ...client,
+            alertType: getClientAlertLevel(client)
+        }))
+        .filter(client => client.alertType !== 'none');
+});
 
 const chartData = computed(() => ({
   labels: ['New AI Leads', 'Existing Clients', 'Other Prospects'],
@@ -131,7 +146,6 @@ const handleChartClick = (event: ChartEvent, elements: ActiveElement[]) => {
     if (label === 'New AI Leads') {
         emit('setCurrentView', View.LeadIntelligence);
     } else if (label === 'Existing Clients') {
-        // Navigate to map, could be filtered for clients in the future
         emit('setCurrentView', View.InteractiveMap);
     }
 };
@@ -173,7 +187,6 @@ watch(() => props.prospects, () => {
   renderChart();
 }, { deep: true });
 
-// Trigger AI Briefing generation when data is available
 watch(() => props.activityFeed, (newVal) => {
     if (newVal && newVal.length > 0) {
         generateAiBriefing();
@@ -285,6 +298,30 @@ const getIconColor = (activity: any) => {
             </button>
           </div>
         </div>
+
+        <!-- Priority Alerts Widget -->
+        <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+            <h3 class="font-bold text-slate-800 mb-4">Priority Alerts</h3>
+            <div v-if="priorityAlerts.length > 0" class="space-y-3">
+                <button v-for="alert in priorityAlerts" :key="alert.id" @click="emit('setCurrentView', View.ProjectHub, { prospect: alert })" class="w-full text-left p-3 rounded-lg hover:bg-slate-50 transition-colors border border-slate-200">
+                    <div class="flex items-center">
+                        <div class="mr-3">
+                            <Wrench v-if="alert.alertType === 'resurface'" class="w-5 h-5 text-red-500" />
+                            <ShieldCheck v-if="alert.alertType === 'warranty'" class="w-5 h-5 text-amber-500" />
+                        </div>
+                        <div>
+                            <p class="font-semibold text-slate-800">{{ alert.name }}</p>
+                            <p v-if="alert.alertType === 'resurface'" class="text-sm text-red-600">5-Year Resurface Due</p>
+                            <p v-if="alert.alertType === 'warranty'" class="text-sm text-amber-600">Warranty Expiring Soon</p>
+                        </div>
+                    </div>
+                </button>
+            </div>
+            <div v-else class="text-sm text-slate-500 text-center py-4">
+                <p>No immediate client actions required. Great work!</p>
+            </div>
+        </div>
+
         <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
           <h3 class="font-bold text-slate-800 mb-4">Quick Links</h3>
           <div class="space-y-2">
@@ -306,3 +343,5 @@ const getIconColor = (activity: any) => {
     </div>
   </div>
 </template>
+
+

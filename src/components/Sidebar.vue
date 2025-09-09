@@ -1,88 +1,94 @@
 <script setup lang="ts">
-import { defineProps, defineEmits } from 'vue';
-import { View } from '@/types';
 import {
-    LayoutDashboard,
-    Map,
-    Lightbulb,
-    Users,
-    User,
-    FileText,
-    Bot,
-    Settings,
-    Plug,
-    CalendarClock,
-    Home
+  LayoutDashboard,
+  Lightbulb,
+  Target,
+  Users,
+  Map,
+  BarChart3,
+  Settings,
+  ShieldCheck,
+  Zap,
+  TestTube2,
+  PieChart,
+  FolderKanban // Import the new icon
 } from 'lucide-vue-next';
+import { View } from '@/types';
 
-const props = defineProps<{
+defineProps<{
   currentView: string;
   isOpen: boolean;
 }>();
 
 const emit = defineEmits(['setCurrentView']);
 
-const navigate = (view: View) => {
-    // This emit will now correctly trigger the setCurrentView function in App.vue
-    emit('setCurrentView', view);
-};
-
-const menuItems = [
-    { view: View.Dashboard, icon: LayoutDashboard, label: 'Dashboard' },
-    { view: View.InteractiveMap, icon: Map, label: 'Interactive Map' },
-    { view: View.LeadIntelligence, icon: Lightbulb, label: 'Lead Intelligence' },
-    { view: View.CompetitorIntel, icon: Users, label: 'Competitor Intel' },
-    { view: View.MyIntel, icon: User, label: 'My Intel' },
-    { view: View.ResidentialProspecting, icon: Home, label: 'Residential Prospecting'},
-    { view: View.Reports, icon: FileText, label: 'Reports' },
-    { view: View.AiInspection, icon: Bot, label: 'AI Inspection' },
+const mainNavItems = [
+  { view: View.Dashboard, icon: LayoutDashboard, label: 'Dashboard' },
+  { view: View.LeadIntelligence, icon: Lightbulb, label: 'Lead Intelligence' },
+  { view: View.CompetitorIntel, icon: Target, label: 'Competitor Intel' },
+  { view: View.ProjectHub, icon: FolderKanban, label: 'Project Hub' }, // Add the new Project Hub tab
+  { view: View.ResidentialProspecting, icon: Users, label: 'Residential Prospecting' },
+  { view: View.InteractiveMap, icon: Map, label: 'Interactive Map' },
+  { view: View.SeoDashboard, icon: PieChart, label: 'SEO & Ads', highlight: true },
 ];
 
-const settingsItems = [
-    { view: View.Integrations, icon: Plug, label: 'Integrations' },
+const secondaryNavItems = [
+    { view: View.AiInspection, icon: Zap, label: 'AI Inspection' },
+    { view: View.Integrations, icon: TestTube2, label: 'Integrations'},
     { view: View.Settings, icon: Settings, label: 'Settings' },
 ];
+
+const handleNavigation = (view: View) => {
+  emit('setCurrentView', view);
+};
 </script>
 
 <template>
-    <!-- Sidebar container -->
-    <div
-        :class="['fixed inset-y-0 left-0 z-30 w-64 bg-slate-800 text-white transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0', isOpen ? 'translate-x-0' : '-translate-x-full']"
-    >
-        <div class="flex flex-col h-full">
-            <!-- Logo -->
-            <div class="flex items-center justify-center h-16 border-b border-slate-700 flex-shrink-0 px-4">
-                <img src="https://storage.googleapis.com/sourcegraph-assets/S-logo-light.svg" alt="CourtDetect Logo" class="h-8 w-auto"/>
-                <span class="ml-3 text-lg font-semibold">CourtDetect</span>
-            </div>
-
-            <!-- Navigation Links -->
-            <nav class="flex-1 overflow-y-auto p-4 space-y-2">
-                <p class="px-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">Analytics</p>
-                <a
-                    v-for="item in menuItems"
-                    :key="item.view"
-                    href="#"
-                    @click.prevent="navigate(item.view)"
-                    :class="['flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors', currentView === item.view ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white']"
-                >
-                    <component :is="item.icon" class="h-5 w-5 mr-3" />
-                    <span>{{ item.label }}</span>
-                </a>
-
-                <p class="px-2 pt-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Configuration</p>
-                <a
-                    v-for="item in settingsItems"
-                    :key="item.view"
-                    href="#"
-                    @click.prevent="navigate(item.view)"
-                    :class="['flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors', currentView === item.view ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white']"
-                >
-                    <component :is="item.icon" class="h-5 w-5 mr-3" />
-                    <span>{{ item.label }}</span>
-                </a>
-            </nav>
-        </div>
+  <aside
+    :class="[
+      'fixed inset-y-0 left-0 bg-slate-800 text-white flex-col z-30 transition-transform duration-300 ease-in-out md:relative md:translate-x-0',
+      isOpen ? 'translate-x-0' : '-translate-x-full'
+    ]"
+    class="w-64 flex"
+  >
+    <div class="flex flex-col w-full">
+      <div class="flex items-center justify-center p-4 border-b border-slate-700 h-16">
+        <ShieldCheck class="w-8 h-8 mr-2 text-indigo-400" />
+        <h1 class="text-xl font-bold whitespace-nowrap">Court Detector</h1>
+      </div>
+      <nav class="flex-1 px-2 py-4 space-y-1">
+        <a
+          v-for="item in mainNavItems"
+          :key="item.view"
+          @click="handleNavigation(item.view)"
+          :class="[
+            'flex items-center px-3 py-2.5 text-sm font-medium rounded-md cursor-pointer transition-colors',
+            currentView === item.view ? 'bg-slate-900 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+          ]"
+        >
+          <component :is="item.icon" class="w-5 h-5 mr-3" :class="{ 'text-indigo-400': item.highlight }" />
+          <span>{{ item.label }}</span>
+          <span v-if="item.highlight" class="ml-auto bg-indigo-500 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
+            AI
+          </span>
+        </a>
+      </nav>
+      <div class="px-2 py-4 mt-auto border-t border-slate-700">
+         <nav class="space-y-1">
+            <a
+            v-for="item in secondaryNavItems"
+            :key="item.view"
+            @click="handleNavigation(item.view)"
+            :class="[
+                'flex items-center px-3 py-2.5 text-sm font-medium rounded-md cursor-pointer transition-colors',
+                currentView === item.view ? 'bg-slate-900 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+            ]"
+            >
+            <component :is="item.icon" class="w-5 h-5 mr-3" />
+            <span>{{ item.label }}</span>
+            </a>
+        </nav>
+      </div>
     </div>
+  </aside>
 </template>
-

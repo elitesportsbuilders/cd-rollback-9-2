@@ -16,4 +16,5 @@ export enum View {
   PipedriveAuth = 'PipedriveAuth',
   MonthlyReport = 'MonthlyReport',
   ProjectHub = 'ProjectHub',
+  SeoDashboard = 'SeoDashboard',
 }

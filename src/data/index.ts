@@ -73,6 +73,27 @@ export const COMPETITOR_INTEL_EVENTS = {
     ],
 };
 
+const competitorActivities = Object.entries(COMPETITOR_INTEL_EVENTS).flatMap(([compId, events]) => {
+    const competitor = CONTRACTOR_STATUS_DATA.find(c => c.id === compId);
+    return events.map(event => ({
+        ...event,
+        source: competitor?.name || 'Unknown Competitor',
+        category: 'Competitor Intel'
+    }));
+});
+
+const leadActivities = [...AI_LEAD_DATA, ...ACKNOWLEDGED_LEAD_DATA].map(lead => ({
+    id: lead.id,
+    type: 'New Lead',
+    date: '2025-09-07', // Using a static date for mock data consistency
+    summary: `New ${lead.type} discovered: ${lead.name}`,
+    source: lead.source,
+    category: 'Lead Generation'
+}));
+
+export const ACTIVITY_FEED_DATA = [...competitorActivities, ...leadActivities]
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
 export const COMPETITOR_SEO_DATA = {
     keywords: ['tennis court resurfacing phoenix', 'pickleball court construction az', 'running track repair arizona'],
     rankings: [

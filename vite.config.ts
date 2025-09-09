@@ -21,9 +21,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     define: {
-      // Vite replaces `process.env.API_KEY` in the code with the value of `env.VITE_API_KEY`
-      // This preserves the `process.env.API_KEY` usage in the source code as requested.
-      'process.env.API_KEY': JSON.stringify(env.VITE_API_KEY),
+      'process.env': env
     }
   }
 })

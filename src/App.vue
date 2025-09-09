@@ -6,7 +6,7 @@ import { ref, computed, reactive, watch, onMounted, defineAsyncComponent } from 
 import { Menu, Radar } from 'lucide-vue-next';
 import Sidebar from '@/components/Sidebar.vue';
 import { View } from '@/types';
-import { ALL_PROSPECTS, COMPETITORS, USER_INTEL_DATA, ACTIVITY_FEED_DATA } from '@/data';
+import { ALL_PROSPECTS, COMPETITORS, USER_INTEL_DATA, ACTIVITY_FEED_DATA, COMPETITOR_SEO_DATA } from '@/data';
 
 // --- 2. FIREBASE IMPORTS ---
 import { initializeApp } from 'firebase/app';
@@ -27,6 +27,7 @@ const isAuthReady = ref(false);
 
 // --- LIFECYCLE HOOKS ---
 onMounted(async () => {
+  debugger;
   if (typeof __firebase_config__ !== 'undefined' && __firebase_config__) {
     console.log('Firebase config found. Initializing and authenticating...');
     try {
@@ -68,6 +69,7 @@ const viewMap: Record<string, any> = {
   [View.PipedriveAuth]: defineAsyncComponent(() => import('@/components/PipedriveAuth.vue')),
   [View.MonthlyReport]: defineAsyncComponent(() => import('@/components/MonthlyReport.vue')),
   [View.ProjectHub]: defineAsyncComponent(() => import('@/components/ProjectHub.vue')),
+  [View.SeoDashboard]: defineAsyncComponent(() => import('@/components/SeoDashboard.vue')),
 };
 
 // --- INTERFACES & HELPERS ---
@@ -92,32 +94,23 @@ function isLead(item: Prospect) {
 
 // --- STATE MANAGEMENT ---
 const STORAGE_KEY = 'courtDetectorSaaSData';
+
 const loadInitialState = (): AppState => {
-  const savedData = localStorage.getItem(STORAGE_KEY);
-  if (savedData) {
-    try {
-      const parsed = JSON.parse(savedData);
-      if (parsed.prospects && parsed.trackedCompetitors && parsed.userIntel && parsed.integrationState) {
-        return parsed as AppState;
-      }
-    } catch (e) {
-      console.error('Error loading saved data, falling back to defaults.', e);
-      localStorage.removeItem(STORAGE_KEY);
-    }
-  }
-  return {
+  const defaults = {
     currentView: View.Dashboard,
     integrationState: { isPipedriveConnected: false },
     prospects: ALL_PROSPECTS,
     trackedCompetitors: COMPETITORS,
     userIntel: USER_INTEL_DATA,
   };
+
+  return defaults;
 };
+
 const appState = reactive<AppState>(loadInitialState());
 
 watch(appState, (newState) => {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
   } catch (e) {
     console.error("Failed to save state:", e);
   }
@@ -187,10 +180,9 @@ const currentComponent = computed(() => {
 const componentProps = computed(() => {
   switch (appState.currentView) {
     case View.Dashboard:
-        return { 
-            activityFeed: ACTIVITY_FEED_DATA,
-            userName: "Mike Woelfel",
-            prospects: appState.prospects, // <-- Pass prospect data
+        return {
+            activityFeed: ACTIVITY_FEED_DATA.slice(0, 5),
+            prospects: appState.prospects
         };
     case View.LeadIntelligence:
       return { leads: appState.prospects.filter(p => isLead(p) || 'isAcknowledged' in p) };
@@ -199,10 +191,9 @@ const componentProps = computed(() => {
     case View.InteractiveMap:
       return { 
           focusedProspectId: focusedProspectId.value,
-          prospects: appState.prospects 
+          prospects: appState.prospects,
+          filter: currentViewPayload.value?.filter 
       };
-    case View.ProjectHub:
-      return { project: appState.prospects.find(p => p.id === focusedProspectId.value) };
     case View.Integrations:
       return { isConnected: appState.integrationState.isPipedriveConnected };
     case View.CompetitorIntel:
@@ -211,6 +202,13 @@ const componentProps = computed(() => {
       return { userIntel: appState.userIntel };
     case View.MonthlyReport:
       return { trackedCompetitors: appState.trackedCompetitors };
+    case View.ProjectHub:
+        return {
+            project: appState.prospects.find(p => p.id === focusedProspectId.value),
+            prospects: appState.prospects
+        };
+    case View.SeoDashboard:
+        return { seoData: COMPETITOR_SEO_DATA };
     case View.Reports:
       return { ...currentViewPayload.value };
     default:
@@ -221,11 +219,14 @@ const componentProps = computed(() => {
 const pageTitle = computed(() => {
     const viewKey = Object.keys(View).find(key => (View as any)[key] === appState.currentView);
     if (!viewKey) return 'Dashboard';
+
+    if (appState.currentView === View.SeoDashboard) return 'SEO & Ads Command Center';
+
     return viewKey.replace(/([A-Z])/g, ' $1').trim();
 });
 
 const mainContentClass = computed(() => {
-    const isFullBleed = [View.InteractiveMap, View.ResidentialProspecting, View.ProjectHub].includes(appState.currentView as any);
+    const isFullBleed = [View.InteractiveMap, View.ResidentialProspecting, View.SeoDashboard, View.ProjectHub].includes(appState.currentView as any);
     return isFullBleed ? 'flex-1 flex flex-col min-h-0' : 'flex-1 overflow-y-auto';
 });
 </script>
@@ -250,17 +251,17 @@ const mainContentClass = computed(() => {
                 </header>
                 
                 <component 
-                    :is="currentComponent"
-                    :class="mainContentClass"
-                    v-bind="componentProps"
-                    @set-current-view="setCurrentView"
-                    @sync-lead="handleSyncLead"
-                    @add-intel="addIntel"
-                    @set-integration-state="setIntegrationState"
-                    @update-tracked-competitors="updateTrackedCompetitors"
-                    @add-prospect="handleAddProspect"
-                    @remove-prospect="handleRemoveProspect"
-                    @acknowledge-lead="handleAcknowledgeLead"
+                  :is="currentComponent"
+                  :class="mainContentClass"
+                  v-bind="componentProps"
+                  @set-current-view="setCurrentView"
+                  @sync-lead="handleSyncLead"
+                  @add-intel="addIntel"
+                  @set-integration-state="setIntegrationState"
+                  @update-tracked-competitors="updateTrackedCompetitors"
+                  @add-prospect="handleAddProspect"
+                  @remove-prospect="handleRemoveProspect"
+                  @acknowledge-lead="handleAcknowledgeLead"
                 />
             </main>
         </div>

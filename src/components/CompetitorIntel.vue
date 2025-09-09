@@ -1,292 +1,354 @@
-<script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from 'vue';
-import { 
-    COMPETITOR_SEO_DATA, 
-    CONTRACTOR_STATUS_DATA, 
-    COMPETITOR_INTEL_EVENTS, 
-    COMPETITORS as ALL_COMPETITOR_NAMES 
-} from '@/data';
-import { 
-    Target, 
-    TrendingUp,
-    ArrowUp,
-    ArrowDown,
-    Minus,
-    Sparkles,
-    FileText,
-    Megaphone,
-    AlertCircle,
-    Gavel,
-    CheckCircle2,
-    XCircle,
-    MinusCircle,
-    Building2,
-    Plus,
-    Search,
-    Trash2,
-    Users
-} from 'lucide-vue-next';
-import { Chart, registerables } from 'chart.js';
-
-Chart.register(...registerables);
-
-// --- PROPS & EMITS ---
-const props = defineProps<{
-  trackedCompetitors: string[];
-}>();
-
-const emit = defineEmits(['updateTrackedCompetitors']);
-
-// --- STATE ---
-const activeTab = ref('Activity');
-const selectedCompetitorName = ref(props.trackedCompetitors[0] || null);
-const selectedKeyword = ref(COMPETITOR_SEO_DATA.keywords[0]);
-const chartCanvas = ref<HTMLCanvasElement | null>(null);
-let seoChart: Chart | null = null;
-const searchTerm = ref('');
-
-// --- COMPUTED PROPERTIES ---
-const selectedCompetitorDetails = computed(() => {
-    if (!selectedCompetitorName.value) return null;
-    return CONTRACTOR_STATUS_DATA.find(c => c.name === selectedCompetitorName.value);
-});
-const selectedCompetitorIntel = computed(() => {
-    if (!selectedCompetitorDetails.value) return [];
-    return (COMPETITOR_INTEL_EVENTS as any)[selectedCompetitorDetails.value.id] || [];
-});
-const filteredCompetitors = computed(() => {
-  if (!searchTerm.value) return [];
-  return ALL_COMPETITOR_NAMES.filter(name => 
-    !props.trackedCompetitors.includes(name) &&
-    name.toLowerCase().includes(searchTerm.value.toLowerCase())
-  );
-});
-const currentRankings = computed(() => {
-  return COMPETITOR_SEO_DATA.rankings.filter(r => r.keyword === selectedKeyword.value)
-    .sort((a, b) => a.rank - b.rank);
-});
-const chartData = computed(() => {
-    if (!selectedKeyword.value) return null;
-    return (COMPETITOR_SEO_DATA.history as any)[selectedKeyword.value];
-});
-const aiSummary = computed(() => {
-    switch(selectedKeyword.value) {
-        case 'tennis court resurfacing phoenix':
-            return "Ace Resurfacing is showing strong upward momentum. Sunstate Courts' ranking dipped, indicating a potential opening.";
-        case 'pickleball court construction az':
-            return "Sunstate Courts holds a dominant #1 position. Ace Resurfacing is a consistent contender.";
-        case 'running track repair arizona':
-            return "C&S Sport Surfaces has lost significant ground. This presents a major opportunity to capture market share.";
-        default: return "Select a keyword for AI-powered insights."
-    }
-});
-
-// --- METHODS ---
-const addCompetitor = (competitorName: string) => {
-  if (!props.trackedCompetitors.includes(competitorName)) {
-    const newList = [...props.trackedCompetitors, competitorName];
-    emit('updateTrackedCompetitors', newList);
-    searchTerm.value = '';
-    if (!selectedCompetitorName.value) {
-        selectedCompetitorName.value = competitorName;
-    }
-  }
-};
-const removeCompetitor = (competitorName: string) => {
-  const newList = props.trackedCompetitors.filter(name => name !== competitorName);
-  emit('updateTrackedCompetitors', newList);
-  if (selectedCompetitorName.value === competitorName) {
-    selectedCompetitorName.value = newList[0] || null;
-  }
-};
-const getStatusIcon = (status: string) => {
-    switch(status) {
-        case 'Active': return CheckCircle2;
-        case 'Suspended': return XCircle;
-        case 'Pending': return MinusCircle;
-        default: return AlertCircle;
-    }
-};
-const getIntelIcon = (type: string) => {
-    switch(type) {
-        case 'License Update': case 'Permit Filed': return FileText;
-        case 'New Ad Campaign': return Megaphone;
-        case 'SEO Ranking Change': return TrendingUp;
-        default: return AlertCircle;
-    }
-};
-const renderChart = () => {
-    if (!chartCanvas.value || !chartData.value || !chartData.value.datasets) {
-        return;
-    }
-    if (seoChart) seoChart.destroy();
-    const colors = ['#4f46e5', '#14B8A6', '#f59e0b', '#3b82f6', '#8b5cf6'];
-    seoChart = new Chart(chartCanvas.value, {
-            type: 'line', data: { labels: chartData.value.labels, datasets: chartData.value.datasets.map((ds: any, index: number) => ({ label: ds.label, data: ds.data, borderColor: colors[index % colors.length], backgroundColor: colors[index % colors.length] + '1A', tension: 0.2, borderWidth: 2, pointBackgroundColor: colors[index % colors.length], pointRadius: 4, pointHoverRadius: 6, })) },
-            options: { responsive: true, maintainAspectRatio: false, scales: { y: { reverse: true, beginAtZero: false, ticks: { stepSize: 1, callback: (value) => `#${value}` }, title: { display: true, text: 'Google Ranking' } }, x: { title: { display: true, text: 'Month (2025)' } } }, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: (context) => `${context.dataset.label}: Rank #${context.raw}` } } } }
-        });
-};
-
-onMounted(() => {
-    if(activeTab.value === 'SEO') renderChart();
-});
-watch([selectedKeyword, activeTab], () => {
-    if(activeTab.value === 'SEO') {
-        nextTick(() => renderChart());
-    }
-});
-</script>
-
 <template>
-    <div class="flex h-full bg-slate-50">
-        <!-- Left Panel: Shared for both tabs -->
-        <div class="w-full md:w-1/3 border-r border-slate-200 h-full flex flex-col">
-            <header class="p-4 border-b border-slate-200 flex-shrink-0">
-                <h1 class="text-xl font-bold text-slate-800 flex items-center">
-                    <Target class="w-6 h-6 mr-3 text-indigo-600" />
-                    Competitor Intel
-                </h1>
-            </header>
-            
-            <div class="p-2 bg-slate-100 border-b border-slate-200 flex-shrink-0">
-                <div class="flex space-x-2">
-                    <button @click="activeTab = 'Activity'" :class="['flex-1 text-sm font-semibold py-1.5 rounded-md', activeTab === 'Activity' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-600 hover:bg-slate-200']">Activity Feed</button>
-                    <button @click="activeTab = 'SEO'" :class="['flex-1 text-sm font-semibold py-1.5 rounded-md', activeTab === 'SEO' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-600 hover:bg-slate-200']">SEO Analysis</button>
-                </div>
-            </div>
-
-            <!-- Conditional Left Panel Content -->
-            <div v-if="activeTab === 'Activity'" class="flex-1 flex flex-col min-h-0">
-                <div class="p-4 flex-shrink-0">
-                     <div class="relative">
-                         <input v-model="searchTerm" type="text" placeholder="Search to add..." class="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                         <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                     </div>
-                     <div v-if="searchTerm && filteredCompetitors.length > 0" class="mt-2 bg-white border border-slate-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
-                         <div v-for="name in filteredCompetitors" :key="name" class="flex items-center justify-between p-2 hover:bg-slate-50">
-                             <span class="text-sm font-medium text-slate-700">{{ name }}</span>
-                             <button @click="addCompetitor(name)" class="p-1 rounded-full text-slate-400 hover:bg-indigo-100 hover:text-indigo-600">
-                                 <Plus class="w-4 h-4" />
-                             </button>
-                         </div>
-                     </div>
-                </div>
-                <div class="flex-1 overflow-y-auto p-4 pt-0 space-y-2">
-                     <p class="px-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">Tracked Companies</p>
-                    <div v-if="trackedCompetitors.length > 0">
-                        <div v-for="name in trackedCompetitors" :key="name" 
-                            @click="selectedCompetitorName = name"
-                            :class="['flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors', selectedCompetitorName === name ? 'bg-indigo-100' : 'hover:bg-slate-100']">
-                            <div class="flex items-center">
-                                <div class="p-2 bg-slate-200 rounded-full mr-3"><Building2 class="w-5 h-5 text-slate-600" /></div>
-                                <div>
-                                    <p class="font-semibold text-slate-800">{{ name }}</p>
-                                    <p class="text-xs text-slate-500 flex items-center">
-                                        <component :is="getStatusIcon(CONTRACTOR_STATUS_DATA.find(c=>c.name === name)?.status || 'Pending')" 
-                                            :class="['w-3 h-3 mr-1.5', {'text-green-500': CONTRACTOR_STATUS_DATA.find(c=>c.name === name)?.status === 'Active'}, {'text-red-500': CONTRACTOR_STATUS_DATA.find(c=>c.name === name)?.status === 'Suspended'}]" />
-                                        License: {{ CONTRACTOR_STATUS_DATA.find(c=>c.name === name)?.status || 'Pending' }}
-                                    </p>
-                                </div>
-                            </div>
-                            <button @click.stop="removeCompetitor(name)" class="p-2 rounded-full text-slate-400 hover:bg-red-100 hover:text-red-600 transition-colors opacity-50 hover:opacity-100"><Trash2 class="w-4 h-4" /></button>
-                        </div>
-                    </div>
-                    <div v-else class="text-center py-8 px-4 border-2 border-dashed border-slate-200 rounded-lg mt-4">
-                        <Users class="w-10 h-10 mx-auto text-slate-300 mb-2" />
-                        <h3 class="font-semibold text-slate-700">No Competitors Tracked</h3>
-                        <p class="text-sm text-slate-500 mt-1">Use the search bar above to add a company.</p>
-                    </div>
-                </div>
-            </div>
-             <div v-if="activeTab === 'SEO'" class="p-4">
-                <label for="keyword-select" class="block text-sm font-medium text-slate-700 mb-1">Select a Keyword to Analyze:</label>
-                <select id="keyword-select" v-model="selectedKeyword" class="w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                    <option v-for="kw in COMPETITOR_SEO_DATA.keywords" :key="kw" :value="kw">{{ kw }}</option>
-                </select>
-            </div>
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+      <!-- Header -->
+      <header class="mb-8">
+        <h1 class="text-3xl font-bold text-white">Competitor Intelligence Dashboard</h1>
+        <p class="text-slate-400">Last Updated: <span id="last-updated"></span></p>
+      </header>
+  
+      <!-- Main Grid Layout -->
+      <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        <!-- Column 1: Competitor Selection & Quick View -->
+        <div class="lg:col-span-1 md:col-span-1 bg-slate-800 p-6 rounded-lg shadow-lg">
+          <h2 class="text-xl font-semibold text-white mb-4">Competitor Quick View</h2>
+          <select id="competitor-select" class="w-full p-2 bg-slate-700 text-white rounded-md mb-4 focus:ring-2 focus:ring-sky-500 focus:outline-none">
+            <!-- Options will be populated by JS -->
+          </select>
+          <div id="quick-view-content">
+            <!-- Content will be populated by JS -->
+          </div>
         </div>
-
-        <!-- Right Panel: Conditional Content -->
-        <div class="w-full md:w-2/3 h-full overflow-y-auto">
-            <!-- Activity Feed View -->
-            <div v-if="activeTab === 'Activity'">
-                <div v-if="selectedCompetitorDetails" class="p-6 space-y-6">
-                    <header>
-                        <h2 class="text-2xl font-bold text-slate-800">{{ selectedCompetitorDetails.name }}</h2>
-                        <p class="text-slate-500">Comprehensive Intelligence Report</p>
-                    </header>
-                    <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
-                        <h3 class="font-bold text-slate-800 flex items-center mb-3"><FileText class="w-5 h-5 mr-2 text-slate-500"/> License & Legal Status</h3>
-                        <div class="text-sm space-y-3">
-                            <div class="flex justify-between items-center p-2 bg-slate-50 rounded-md">
-                                <span class="font-semibold text-slate-600">License Status</span>
-                                <span class="font-bold flex items-center px-2 py-0.5 rounded-full text-xs" :class="{
-                                    'bg-green-100 text-green-700': selectedCompetitorDetails.status === 'Active',
-                                    'bg-red-100 text-red-700': selectedCompetitorDetails.status === 'Suspended',
-                                    'bg-amber-100 text-amber-700': selectedCompetitorDetails.status === 'Pending',
-                                }">
-                                     <component :is="getStatusIcon(selectedCompetitorDetails.status)" class="w-3 h-3 mr-1.5" />
-                                    {{ selectedCompetitorDetails.status }}
-                                </span>
-                            </div>
-                            <div v-if="selectedCompetitorDetails.violations.length > 0" class="p-2 bg-amber-50 border-l-4 border-amber-400">
-                               <p class="font-semibold text-amber-800 flex items-center"><AlertCircle class="w-4 h-4 mr-2"/>Active Violations</p>
-                               <p v-for="(v, i) in selectedCompetitorDetails.violations" :key="i" class="text-xs text-amber-700 mt-1 pl-6">{{ v.description }} ({{v.date}})</p>
-                            </div>
-                             <div v-if="selectedCompetitorDetails.lawsuits.length > 0" class="p-2 bg-rose-50 border-l-4 border-rose-400">
-                               <p class="font-semibold text-rose-800 flex items-center"><Gavel class="w-4 h-4 mr-2"/>Active Lawsuits</p>
-                               <p v-for="(l, i) in selectedCompetitorDetails.lawsuits" :key="i" class="text-xs text-rose-700 mt-1 pl-6">{{ l.description }} (Case: {{l.caseNumber}})</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div v-else class="flex items-center justify-center h-full text-center text-slate-500">
-                    <div>
-                        <Target class="w-12 h-12 mx-auto text-slate-300 mb-2" />
-                        <p>Select a competitor to view their activity feed.</p>
-                    </div>
-                </div>
+  
+        <!-- Column 2: News Feed & Project Tracker -->
+        <div class="lg:col-span-2 md:col-span-2 space-y-6">
+          <!-- Real-Time News & Social Media Feed -->
+          <div class="bg-slate-800 p-6 rounded-lg shadow-lg">
+            <h2 class="text-xl font-semibold text-white mb-4">Real-Time News & Social Media Feed</h2>
+            <div id="news-feed-content" class="space-y-4 max-h-96 overflow-y-auto pr-2">
+              <!-- News items will be populated by JS -->
             </div>
-            <!-- SEO Analysis View -->
-            <div v-if="activeTab === 'SEO'" class="p-6">
-                 <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                    <div class="lg:col-span-3 bg-white p-6 rounded-lg shadow-md border border-slate-200">
-                         <h2 class="text-xl font-bold text-slate-800 mb-4">Historical Rankings</h2>
-                         <div class="h-80"><canvas ref="chartCanvas"></canvas></div>
-                    </div>
-                    <div class="lg:col-span-2 space-y-6">
-                         <div class="bg-white p-6 rounded-lg shadow-md border border-slate-200">
-                             <h2 class="text-xl font-bold text-slate-800 mb-4">Current Rankings</h2>
-                             <table class="w-full text-sm">
-                                 <thead class="text-left text-xs text-slate-500 uppercase border-b border-slate-200">
-                                     <tr>
-                                         <th class="p-2 text-center">Rank</th><th class="p-2">Company</th><th class="p-2 text-center">Change</th>
-                                     </tr>
-                                 </thead>
-                                 <tbody>
-                                     <tr v-for="seo in currentRankings" :key="seo.competitor" class="border-b border-slate-100 last:border-b-0">
-                                         <td class="p-2 text-center font-bold text-lg" :class="{'text-indigo-600': seo.rank <= 3}">{{ seo.rank }}</td>
-                                         <td class="p-2 font-medium text-slate-700">
-                                             <a :href="`#`" target="_blank" class="hover:underline hover:text-indigo-600">{{ seo.competitor }}</a>
-                                         </td>
-                                         <td class="p-2 text-center font-semibold flex items-center justify-center" :class="{'text-green-600': seo.change > 0, 'text-red-600': seo.change < 0, 'text-slate-400': seo.change === 0}">
-                                             <ArrowUp v-if="seo.change > 0" class="w-4 h-4 mr-1"/><ArrowDown v-if="seo.change < 0" class="w-4 h-4 mr-1"/><Minus v-if="seo.change === 0" class="w-4 h-4 mr-1"/>
-                                             <span>{{ seo.change !== 0 ? Math.abs(seo.change) : '' }}</span>
-                                         </td>
-                                     </tr>
-                                 </tbody>
-                               </table>
-                         </div>
-                         <div class="bg-indigo-50 border-l-4 border-indigo-400 p-6 rounded-lg">
-                             <h2 class="text-xl font-bold text-slate-800 flex items-center mb-2">
-                                 <Sparkles class="w-5 h-5 mr-2 text-indigo-600" />
-                                 AI Strategic Insights
-                             </h2>
-                             <p class="text-sm text-slate-700">{{ aiSummary }}</p>
-                         </div>
-                    </div>
-                </div>
+          </div>
+  
+          <!-- Competitor Project Tracker -->
+          <div class="bg-slate-800 p-6 rounded-lg shadow-lg">
+            <h2 class="text-xl font-semibold text-white mb-4">Competitor Project Tracker (ASBA Region)</h2>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left">
+                <thead class="border-b border-slate-600">
+                  <tr>
+                    <th class="p-2">Competitor</th>
+                    <th class="p-2">Project Name</th>
+                    <th class="p-2">Status</th>
+                    <th class="p-2">Bid (est.)</th>
+                  </tr>
+                </thead>
+                <tbody id="project-tracker-body">
+                  <!-- Project rows will be populated by JS -->
+                </tbody>
+              </table>
             </div>
+          </div>
         </div>
+  
+        <!-- Column 3: SWOT & Market Share -->
+        <div class="lg:col-span-1 md:col-span-3 space-y-6">
+          <!-- Dynamic SWOT Analysis -->
+          <div class="bg-slate-800 p-6 rounded-lg shadow-lg">
+            <h2 class="text-xl font-semibold text-white mb-4">Dynamic SWOT Analysis</h2>
+            <div id="swot-analysis-content" class="grid grid-cols-2 gap-4 text-sm">
+              <!-- SWOT content will be populated by JS -->
+            </div>
+          </div>
+          <!-- Market Share & Service Trends -->
+          <div class="bg-slate-800 p-6 rounded-lg shadow-lg">
+            <h2 class="text-xl font-semibold text-white mb-4">Market Share (AZ)</h2>
+            <div class="chart-container">
+              <canvas id="marketShareChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-</template>
+  </template>
+  
+  <script setup lang="ts">
+  import { onMounted } from 'vue';
+  
+  // --- TYPE DEFINITIONS ---
+  interface Swot {
+    strengths: string[];
+    weaknesses: string[];
+    opportunities: string[];
+    threats: string[];
+  }
+  
+  interface Competitor {
+    name: string;
+    summary: string;
+    keyContact: string;
+    swot: Swot;
+  }
+  
+  interface NewsItem {
+    source: string;
+    text: string;
+    sentiment: 'positive' | 'negative' | 'neutral';
+  }
+  
+  interface Project {
+    competitor: string;
+    project: string;
+    status: 'In Progress' | 'Complete' | 'Bid Lost' | 'Bidding';
+    bid: number;
+    notes: string;
+  }
+  
+  
+  // --- MOCK DATA ---
+  // TODO: Replace this with data fetched from Firebase Data Connect
+  const competitorsData: Record<string, Competitor> = {
+    'compA': {
+      name: "Competitor A",
+      summary: "Specializes in post-tension concrete courts. Recently expanded into AZ.",
+      keyContact: "John Doe (Regional Manager)",
+      swot: {
+        strengths: ["Strong supplier relationships", "Experienced team"],
+        weaknesses: ["Negative review on Google", "Limited track experience"],
+        opportunities: ["ASBA spec changes benefit them", "Growth in pickleball"],
+        threats: ["New competitor entering market", "Rising material costs"]
+      }
+    },
+    'compB': {
+      name: "Competitor B",
+      summary: "Focuses on high-school and collegiate running tracks.",
+      keyContact: "Jane Smith (Sales Director)",
+      swot: {
+        strengths: ["Proprietary track surfacing material", "Strong public sector contracts"],
+        weaknesses: ["Slow to adopt pickleball trend", "Higher price point"],
+        opportunities: ["New bond issues for school athletics", "Green building initiatives"],
+        threats: ["Supply chain issues for their material", "Aggressive bidding from smaller firms"]
+      }
+    },
+    'compC': {
+      name: "Competitor C",
+      summary: "Aggressive pricing on resurfacing projects. Growing quickly.",
+      keyContact: "Sam Wilson (Owner)",
+      swot: {
+        strengths: ["Low overhead", "Fast project turnaround"],
+        weaknesses: ["Smaller team, capacity issues", "Less brand recognition"],
+        opportunities: ["HOA resurfacing contracts", "Economic downturn favors lower bids"],
+        threats: ["Reputation risk from cutting corners", "Larger competitors can out-bid"]
+      }
+    }
+  };
+  
+  const newsFeedData: NewsItem[] = [
+    { source: 'LinkedIn', text: 'Competitor A just announced a new partnership with a large HOA in Scottsdale.', sentiment: 'positive' },
+    { source: 'News Article', text: 'Competitor B featured in "Construction Today" for innovative track surfacing.', sentiment: 'positive' },
+    { source: 'Gemini Analysis', text: 'Overall industry chatter is positive about new pickleball surfacing materials.', sentiment: 'neutral' },
+    { source: 'Google Review', text: 'A customer left a 2-star review for Competitor A regarding project delays.', sentiment: 'negative' },
+    { source: 'Press Release', text: 'Competitor C has acquired new line-painting equipment to speed up projects.', sentiment: 'neutral' }
+  ];
+  
+  const projectTrackerData: Project[] = [
+    { competitor: 'Competitor A', project: 'Sun City Grand Courts', status: 'In Progress', bid: 250000, notes: 'Using new acrylic' },
+    { competitor: 'Competitor C', project: 'Phoenix High School Track', status: 'Bid Lost', bid: 1200000, notes: 'We were underbid' },
+    { competitor: 'Competitor B', project: 'ASU Practice Field', status: 'Complete', bid: 750000, notes: 'High-performance surface' },
+    { competitor: 'Competitor A', project: 'Mesa Community Pickleball', status: 'Bidding', bid: 500000, notes: '12 new courts' }
+  ];
+  
+  // --- GEMINI API INTEGRATION (EXAMPLE) ---
+  async function getSentimentFromGemini(text: string): Promise<string> {
+    console.log(`Analyzing sentiment for: "${text}"`);
+    // This function remains the same as in the HTML mockup.
+    // It simulates a call to the Gemini API.
+    const sentiments = ['positive', 'negative', 'neutral'];
+    return new Promise(resolve => setTimeout(() => resolve(sentiments[Math.floor(Math.random() * 3)]), 500));
+  }
+  
+  // --- RENDERING FUNCTIONS ---
+  // These functions directly manipulate the DOM. In a more complex Vue app,
+  // you might use refs and computed properties, but for a direct port, this is fine.
+  
+  function renderQuickView(competitorId: string) {
+    const competitor = competitorsData[competitorId];
+    const contentEl = document.getElementById('quick-view-content');
+    if (!contentEl || !competitor) return;
+    
+    contentEl.innerHTML = `
+      <div class="space-y-3">
+        <div>
+          <h3 class="font-semibold text-white">${competitor.name}</h3>
+          <p class="text-sm text-slate-400">${competitor.summary}</p>
+        </div>
+        <div>
+          <h4 class="font-semibold text-white text-sm">Key Contact</h4>
+          <p class="text-sm text-slate-400">${competitor.keyContact}</p>
+        </div>
+        <div>
+          <h4 class="font-semibold text-white text-sm">Recent News Sentiment</h4>
+          <p class="text-sm text-slate-400 flex items-center" id="sentiment-indicator">
+            <span class="mr-2 h-3 w-3 rounded-full bg-yellow-400"></span>Loading...
+          </p>
+        </div>
+      </div>
+    `;
+  
+    getSentimentFromGemini(`Overall sentiment for ${competitor.name}`).then(sentiment => {
+      const indicator = document.getElementById('sentiment-indicator');
+      if (!indicator) return;
+      const colors = { positive: 'bg-green-400', negative: 'bg-red-400', neutral: 'bg-yellow-400' };
+      const text = { positive: '😊 Positive', negative: '😞 Negative', neutral: '😐 Neutral' };
+      indicator.innerHTML = `<span class="mr-2 h-3 w-3 rounded-full ${colors[sentiment]}"></span>${text[sentiment]}`;
+    });
+  }
+  
+  function renderNewsFeed() {
+    const contentEl = document.getElementById('news-feed-content');
+    if(!contentEl) return;
+    const sentimentIcons = {
+      positive: `<i data-lucide="trending-up" class="text-green-400"></i>`,
+      negative: `<i data-lucide="trending-down" class="text-red-400"></i>`,
+      neutral: `<i data-lucide="minus" class="text-yellow-400"></i>`,
+    };
+  
+    contentEl.innerHTML = newsFeedData.map(item => `
+      <div class="flex items-start space-x-3 text-sm p-2 bg-slate-700/50 rounded-md">
+        <div class="flex-shrink-0 w-4 h-4">${sentimentIcons[item.sentiment]}</div>
+        <div>
+          <span class="font-semibold text-sky-400">[${item.source}]</span>
+          <p class="text-slate-300">${item.text}</p>
+        </div>
+      </div>
+    `).join('');
+    
+    // @ts-ignore - lucide is globally available from the CDN script
+    lucide.createIcons();
+  }
+  
+  function renderProjectTracker() {
+    const bodyEl = document.getElementById('project-tracker-body');
+    if(!bodyEl) return;
+    const statusColors = {
+      'In Progress': 'text-yellow-400',
+      'Complete': 'text-green-400',
+      'Bid Lost': 'text-red-400',
+      'Bidding': 'text-sky-400'
+    };
+    bodyEl.innerHTML = projectTrackerData.map(p => `
+      <tr class="border-b border-slate-700 hover:bg-slate-700/50">
+        <td class="p-2">${p.competitor}</td>
+        <td class="p-2">${p.project}</td>
+        <td class="p-2 font-semibold ${statusColors[p.status] || ''}">${p.status}</td>
+        <td class="p-2">$${p.bid.toLocaleString()}</td>
+      </tr>
+    `).join('');
+  }
+  
+  function renderSwotAnalysis(competitorId: string) {
+    const competitor = competitorsData[competitorId];
+    const contentEl = document.getElementById('swot-analysis-content');
+    if (!contentEl || !competitor) return;
+  
+    const { strengths, weaknesses, opportunities, threats } = competitor.swot;
+    contentEl.innerHTML = `
+      <div>
+        <h4 class="font-bold text-green-400 mb-1">Strengths</h4>
+        <ul class="list-disc list-inside text-slate-400">${strengths.map(s => `<li>${s}</li>`).join('')}</ul>
+      </div>
+      <div>
+        <h4 class="font-bold text-red-400 mb-1">Weaknesses</h4>
+        <ul class="list-disc list-inside text-slate-400">${weaknesses.map(w => `<li>${w}</li>`).join('')}</ul>
+      </div>
+      <div>
+        <h4 class="font-bold text-sky-400 mb-1">Opportunities</h4>
+        <ul class="list-disc list-inside text-slate-400">${opportunities.map(o => `<li>${o}</li>`).join('')}</ul>
+      </div>
+      <div>
+        <h4 class="font-bold text-orange-400 mb-1">Threats</h4>
+        <ul class="list-disc list-inside text-slate-400">${threats.map(t => `<li>${t}</li>`).join('')}</ul>
+      </div>
+    `;
+  }
+  
+  function renderCharts() {
+      const canvas = document.getElementById('marketShareChart') as HTMLCanvasElement;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+  
+      // @ts-ignore - Chart is globally available from the CDN script
+      new Chart(ctx, {
+          type: 'doughnut',
+          data: {
+              labels: ['Elite Sports Builders', 'Competitor A', 'Competitor B', 'Competitor C', 'Other'],
+              datasets: [{
+                  label: 'Market Share in AZ',
+                  data: [40, 25, 15, 15, 5],
+                  backgroundColor: [
+                      'rgba(34, 211, 238, 0.7)',
+                      'rgba(250, 204, 21, 0.7)',
+                      'rgba(249, 115, 22, 0.7)',
+                      'rgba(239, 68, 68, 0.7)',
+                      'rgba(107, 114, 128, 0.7)'
+                  ],
+                  borderColor: '#1e293b',
+                  borderWidth: 3
+              }]
+          },
+          options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                  legend: {
+                      position: 'bottom',
+                      labels: { color: '#cbd5e1' }
+                  }
+              }
+          }
+      });
+  }
+  
+  // --- INITIALIZATION ---
+  onMounted(() => {
+    const updatedEl = document.getElementById('last-updated');
+    if (updatedEl) {
+        updatedEl.innerText = new Date().toLocaleString();
+    }
+  
+    const selectEl = document.getElementById('competitor-select') as HTMLSelectElement;
+    if (selectEl) {
+        Object.keys(competitorsData).forEach(key => {
+          const option = document.createElement('option');
+          option.value = key;
+          option.innerText = competitorsData[key].name;
+          selectEl.appendChild(option);
+        });
+  
+        const initialCompetitor = 'compA';
+        selectEl.value = initialCompetitor;
+  
+        renderQuickView(initialCompetitor);
+        renderNewsFeed();
+        renderProjectTracker();
+        renderSwotAnalysis(initialCompetitor);
+        renderCharts();
+  
+        selectEl.addEventListener('change', (e) => {
+          const selectedCompetitorId = (e.target as HTMLSelectElement).value;
+          renderQuickView(selectedCompetitorId);
+          renderSwotAnalysis(selectedCompetitorId);
+        });
+    }
+  });
+  
+  </script>
+  
+  <style>
+    .chart-container {
+      position: relative;
+      height: 300px;
+      width: 100%;
+    }
+  </style>
+  

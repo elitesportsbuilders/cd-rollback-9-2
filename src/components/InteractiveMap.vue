@@ -1,417 +1,320 @@
-<script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, reactive, nextTick, createApp, defineComponent, h } from 'vue';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-import 'leaflet-draw/dist/leaflet.draw.css';
-import 'leaflet.heat';
-import { ALL_PROSPECTS } from '@/data'; // Import local data for heatmaps
-import { View } from '@/types';
-
-import { 
-    Search, SlidersHorizontal, Layers, X, FileText, Newspaper, Home,
-    CircleUser, Check, Link as LinkIcon, Building, Shrub, AlertTriangle, Sparkles, Wrench
-} from 'lucide-vue-next';
-
-defineOptions({
-    inheritAttrs: false
-});
-
-const props = defineProps<{
-  focusedProspectId: number | null;
-  prospects: any[];
-}>();
-
-const emit = defineEmits(['setCurrentView', 'removeProspect', 'acknowledgeLead']);
-
-// --- COMPONENT STATE ---
-const localProspects = ref<any[]>(props.prospects || []);
-const isLoading = ref(true);
-
-// --- TYPE GUARDS & HELPERS ---
-function isLead(item: any) { return item.type === 'permit' || item.type === 'news'; }
-function isCourt(item: any) { return item.type === 'Tennis' || item.type === 'Pickleball' || item.type === 'Basketball'; }
-function isResidential(item: any) { return item.type === 'residential'; }
-
-// --- BUSINESS LOGIC FOR ALERTS ---
-const getClientAlertLevel = (project: any): 'resurface' | 'warranty' | 'none' => {
-  if (!project || !project.isClient || !project.completionDate) return 'none';
-  
-  const today = new Date('2025-09-08T12:00:00Z');
-  const completionDate = new Date(project.completionDate);
-  const warrantyExpiration = new Date(project.warrantyExpiration);
-
-  const yearsSinceCompletion = (today.getTime() - completionDate.getTime()) / (1000 * 60 * 60 * 24 * 365);
-  if (yearsSinceCompletion >= 5) {
-    return 'resurface';
-  }
-
-  const monthsToWarrantyExpiry = (warrantyExpiration.getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
-  if (monthsToWarrantyExpiry <= 6) {
-    return 'warranty';
-  }
-
-  return 'none';
-};
-
-// --- DYNAMIC POPUP COMPONENT ---
-const PopupContent = defineComponent({
-    props: {
-        item: { type: Object, required: true },
-        onSetCurrentView: { type: Function, required: true },
-        onRemoveProspect: { type: Function, required: true },
-        onAcknowledgeLead: { type: Function, required: true }
-    },
-    setup(props) {
-        return () => h('div', { class: 'font-sans text-slate-800' }, [
-            'isAcknowledged' in props.item && props.item.isAcknowledged === false 
-            ? h('div', { class: 'bg-white rounded-lg shadow-xl p-4', style: 'width: 280px;'}, [
-                h('h3', { class: 'font-bold text-base mb-2 flex items-center text-indigo-700' }, [ h(Sparkles, {class: 'w-5 h-5 mr-2'}), 'AI-Discovered Opportunity' ]),
-                h('p', { class: 'text-sm text-slate-600 mb-3' }, props.item.aiSummary),
-                h('a', { href: props.item.sourceUrl, target: '_blank', class: 'text-xs text-indigo-600 hover:underline' }, `Source: ${props.item.source}`),
-                h('div', { class: 'flex space-x-2 mt-4' }, [
-                    h('button', { onClick: () => props.onSetCurrentView(View.LeadIntelligence), class: 'flex-1 text-sm bg-indigo-600 text-white px-3 py-1.5 rounded-md hover:bg-indigo-700 font-semibold' }, 'View Full Intel'),
-                    h('button', { onClick: () => props.onRemoveProspect(props.item.id), class: 'text-sm bg-slate-200 text-slate-700 px-3 py-1.5 rounded-md hover:bg-slate-300 font-semibold' }, 'Dismiss'),
-                ])
-            ])
-            : h('div', { class: 'bg-white rounded-lg shadow-xl p-4', style: 'width: 280px;' }, [
-                h('h3', { class: 'font-bold text-base mb-2 truncate' }, props.item.name),
-                 (isLead(props.item))
-                    ? h('div', { class: 'text-sm space-y-2' }, [
-                        h('p', { class: 'flex items-center text-slate-600' }, [
-                            props.item.type === 'permit' ? h(FileText, { class: 'w-4 h-4 mr-2 text-violet-500 flex-shrink-0' }) : h(Newspaper, { class: 'w-4 h-4 mr-2 text-sky-500 flex-shrink-0' }),
-                            h('span', `Source: ${props.item.source || 'Unknown'}`)
-                        ]),
-                        !props.item.isSynced
-                            ? h('button', { onClick: () => {}, class: 'w-full mt-2 text-sm bg-indigo-600 text-white px-3 py-1.5 rounded-md hover:bg-indigo-700' }, 'Sync to CRM')
-                            : h('div', { class: 'w-full mt-2 text-sm bg-slate-200 text-slate-600 px-3 py-1.5 rounded-md' }, 'Synced')
-                    ])
-                    : (props.item.isClient)
-                    ? h('div', { class: 'text-sm space-y-2' }, [
-                        h('p', { class: 'font-semibold' }, 'Client Project'),
-                        h('button', { onClick: () => props.onSetCurrentView(View.ProjectHub, { prospectId: props.item.id }), class: 'w-full mt-2 text-sm bg-slate-700 text-white px-3 py-1.5 rounded-md hover:bg-slate-800' }, 'Open Project Hub')
-                      ])
-                    : h('div', { class: 'text-sm space-y-2' }, [
-                        h('p', { class: 'font-semibold' }, 'Prospect'),
-                        h('button', { onClick: () => props.onSetCurrentView(View.MyIntel, { prospectId: props.item.id }), class: 'w-full mt-2 text-sm bg-slate-700 text-white px-3 py-1.5 rounded-md hover:bg-slate-800' }, 'View Details')
-                      ])
-            ])
-        ]);
-    }
-});
-
-// --- MAP & UI STATE ---
-const mapContainerRef = ref(null);
-let map: L.Map | null = null;
-let heatLayer: any = null;
-let markerLayer: L.LayerGroup | null = null;
-let markerRefs: { [key: string]: L.Marker } = {};
-const isFilterPanelOpen = ref(false);
-const isHeatmapPanelOpen = ref(false);
-
-const filters = reactive({
-    courts: true, leads: true, residential: true, aiLeads: true,
-    // New Client Alert Filters
-    needsResurfacing: false,
-    warrantyExpiring: false,
-});
-
-const activeHeatmap = ref('none');
-
-// --- ICON CREATION ---
-const createIcon = (item: any): L.DivIcon => {
-    let iconClass = 'icon-base ';
-    if ('isAcknowledged' in item && item.isAcknowledged === false) {
-        iconClass += 'icon-ai-lead map-marker-ping';
-    } else if (isLead(item)) {
-        iconClass += item.type === 'permit' ? 'icon-permit' : 'icon-news';
-    } else if (isCourt(item)) {
-        if (item.isClient) {
-            const alertLevel = getClientAlertLevel(item);
-            if (alertLevel === 'resurface') {
-                iconClass += 'icon-client icon-client-alert-resurface';
-            } else if (alertLevel === 'warranty') {
-                iconClass += 'icon-client icon-client-alert-warranty';
-            } else {
-                 iconClass += item.isDue ? 'icon-client-due' : 'icon-client';
-            }
-        } else {
-            iconClass += `icon-${item.status}`;
-        }
-    } else if (isResidential(item)) {
-        iconClass += `icon-residential-${item.status}`;
-    }
-    return L.divIcon({ className: iconClass, html: `<div class="icon-inner"></div>`, iconSize: [32, 32], iconAnchor: [16, 16] });
-};
-
-// --- MAP LOGIC ---
-const applyFiltersAndDraw = () => {
-    if (!markerLayer || !map) return;
-    markerLayer.clearLayers();
-    markerRefs = {};
-    const heatmapActive = activeHeatmap.value !== 'none';
-
-    if (activeHeatmap.value === 'leads' && heatLayer) {
-        const leadPoints = ALL_PROSPECTS.filter(p => isLead(p) || ('isAcknowledged' in p && p.isAcknowledged === false)).map(p => [...p.coords, 0.8]);
-        heatLayer.setLatLngs(leadPoints).addTo(map);
-    } else if (activeHeatmap.value === 'clients' && heatLayer) {
-        const clientPoints = ALL_PROSPECTS.filter((p: any) => p.isClient).map(p => [...p.coords, 0.8]);
-        heatLayer.setLatLngs(clientPoints).addTo(map);
-    } else if (heatLayer && map.hasLayer(heatLayer)) {
-        map.removeLayer(heatLayer);
-    }
-    
-    const isAlertFilterActive = filters.needsResurfacing || filters.warrantyExpiring;
-
-    const filteredData = localProspects.value.filter((item) => {
-        if (!item.type) return false;
-        if (item.id === props.focusedProspectId) return true;
-        
-        const isAiLead = 'isAcknowledged' in item && item.isAcknowledged === false;
-
-        // Client Alert Filtering Logic
-        if (item.isClient && isAlertFilterActive) {
-            const alertLevel = getClientAlertLevel(item);
-            if (filters.needsResurfacing && alertLevel === 'resurface') return true;
-            if (filters.warrantyExpiring && alertLevel === 'warranty') return true;
-            return false;
-        }
-
-        if (heatmapActive && activeHeatmap.value === 'leads' && (isLead(item) || isAiLead)) return false;
-        if (heatmapActive && activeHeatmap.value === 'clients' && item.isClient) return false;
-
-        if (isAiLead) {
-            if (!filters.aiLeads) return false;
-        } else if (isCourt(item)) {
-            if (!filters.courts) return false;
-        } else if (isLead(item)) {
-            if (!filters.leads) return false;
-        } else if (isResidential(item)) {
-            if (!filters.residential) return false;
-        } else {
-            return false;
-        }
-        return true;
-    });
-
-    filteredData.forEach((item) => {
-        const icon = createIcon(item);
-        const marker = L.marker(item.coords, { icon }).addTo(markerLayer!);
-        markerRefs[item.id] = marker;
-        
-        marker.on('popupopen', (e: L.PopupEvent) => {
-            const container = document.createElement('div');
-            e.popup.setContent(container);
-            const popupApp = createApp(PopupContent, {
-                item,
-                onSetCurrentView: (view: string, payload: any) => emit('setCurrentView', view, payload),
-                onRemoveProspect: (id: number) => {
-                    emit('removeProspect', id);
-                    map?.closePopup();
-                },
-                onAcknowledgeLead: (id: number) => {
-                    emit('acknowledgeLead', id);
-                    map?.closePopup();
-                }
-            });
-            popupApp.mount(container);
-            (marker as any).popupApp = popupApp;
-        });
-
-        marker.on('popupclose', (e: L.PopupEvent) => {
-            if ((e.target as any).popupApp) {
-                (e.target as any).popupApp.unmount();
-                (e.target as any).popupApp = null;
-            }
-        });
-
-        marker.bindPopup(document.createElement('div'));
-    });
-};
-
-// --- VUE LIFECYCLE ---
-watch(() => props.prospects, (newProspects) => {
-    localProspects.value = newProspects;
-    applyFiltersAndDraw();
-}, { deep: true, immediate: true });
-
-watch(filters, () => {
-    applyFiltersAndDraw();
-}, { deep: true });
-
-watch(activeHeatmap, () => {
-    applyFiltersAndDraw();
-});
-
-
-onMounted(() => {
-    if (mapContainerRef.value) {
-        map = L.map(mapContainerRef.value, { zoomControl: false }).setView([33.5, -112.0], 10);
-        
-        const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            attribution: 'Tiles &copy; Esri'
-        });
-        const streetLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap & CARTO'
-        });
-        
-        satelliteLayer.addTo(map);
-
-        const baseLayers = { "Satellite": satelliteLayer, "Street": streetLayer };
-        L.control.layers(baseLayers, undefined, { position: 'topright' }).addTo(map);
-        L.control.zoom({ position: 'topleft' }).addTo(map);
-
-        markerLayer = L.layerGroup().addTo(map);
-        heatLayer = (L as any).heatLayer([], { radius: 25, blur: 20, maxZoom: 12 });
-        applyFiltersAndDraw();
-        isLoading.value = false;
-    }
-});
-</script>
-
 <template>
-    <div v-bind="$attrs" class="flex-1 flex flex-col relative bg-slate-200">
-        <div id="map" ref="mapContainerRef" class="flex-1 w-full h-full"></div>
-        
-        <!-- Desktop Controls -->
-        <div class="hidden md:flex absolute top-4 left-4 z-[1000] space-x-2 items-start">
-            <div class="relative">
-                <input type="text" placeholder="Search..." class="w-72 pl-10 pr-4 py-2 bg-white rounded-lg shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-                <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            </div>
-            <div class="relative">
-                <button @click.stop="isFilterPanelOpen = !isFilterPanelOpen; isHeatmapPanelOpen = false" class="bg-white p-2 rounded-lg shadow-lg hover:bg-slate-50">
-                    <SlidersHorizontal class="w-6 h-6 text-slate-700" />
-                </button>
-                <div v-if="isFilterPanelOpen" @click.stop class="absolute top-full mt-2 w-72 bg-white/90 backdrop-blur-sm p-4 rounded-lg shadow-2xl border">
-                    <h3 class="text-lg font-bold text-slate-800 mb-3">Filters</h3>
-                    <div class="space-y-4">
-                        <div>
-                            <label class="text-sm font-semibold text-slate-600">Standard Layers</label>
-                            <div class="mt-2 space-y-1">
-                                <div class="flex items-center"><input id="filter-ai-leads-desktop" type="checkbox" v-model="filters.aiLeads" class="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500" /><label for="filter-ai-leads-desktop" class="ml-2 block text-sm">AI-Discovered Leads</label></div>
-                                <div class="flex items-center"><input id="filter-courts-desktop" type="checkbox" v-model="filters.courts" class="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500" /><label for="filter-courts-desktop" class="ml-2 block text-sm">Projects</label></div>
-                                <div class="flex items-center"><input id="filter-leads-desktop" type="checkbox" v-model="filters.leads" class="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500" /><label for="filter-leads-desktop" class="ml-2 block text-sm">Acknowledged Leads</label></div>
-                                <div class="flex items-center"><input id="filter-residential-desktop" type="checkbox" v-model="filters.residential" class="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500" /><label for="filter-residential-desktop" class="ml-2 block text-sm">Residential Prospects</label></div>
-                            </div>
-                        </div>
-                        <div class="pt-3 border-t">
-                             <label class="text-sm font-semibold text-slate-600">Client Opportunity Alerts</label>
-                             <div class="mt-2 space-y-1">
-                                <div class="flex items-center"><input id="filter-resurface-desktop" type="checkbox" v-model="filters.needsResurfacing" class="h-4 w-4 rounded text-red-600 focus:ring-red-500" /><label for="filter-resurface-desktop" class="ml-2 block text-sm">Needs Resurfacing</label></div>
-                                <div class="flex items-center"><input id="filter-warranty-desktop" type="checkbox" v-model="filters.warrantyExpiring" class="h-4 w-4 rounded text-amber-600 focus:ring-amber-500" /><label for="filter-warranty-desktop" class="ml-2 block text-sm">Warranty Expiring</label></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="relative">
-                <button @click.stop="isHeatmapPanelOpen = !isHeatmapPanelOpen; isFilterPanelOpen = false" class="bg-white p-2 rounded-lg shadow-lg hover:bg-slate-50">
-                    <Layers class="w-6 h-6 text-slate-700" />
-                </button>
-                 <div v-if="isHeatmapPanelOpen" @click.stop class="absolute top-full mt-2 w-72 bg-white/90 backdrop-blur-sm p-4 rounded-lg shadow-2xl border">
-                    <h3 class="text-lg font-bold text-slate-800 mb-3">Heatmap Layers</h3>
-                    <div class="space-y-2">
-                        <div class="flex items-center"><input id="heatmap-none-desktop" name="heatmap" type="radio" value="none" v-model="activeHeatmap" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500" /><label for="heatmap-none-desktop" class="ml-2 block text-sm">None</label></div>
-                        <div class="flex items-center"><input id="heatmap-leads-desktop" name="heatmap" type="radio" value="leads" v-model="activeHeatmap" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500" /><label for="heatmap-leads-desktop" class="ml-2 block text-sm">Lead Density</label></div>
-                        <div class="flex items-center"><input id="heatmap-clients-desktop" name="heatmap" type="radio" value="clients" v-model="activeHeatmap" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500" /><label for="heatmap-clients-desktop" class="ml-2 block text-sm">Client Concentration</label></div>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div class="relative h-full w-full rounded-lg shadow-lg overflow-hidden">
+        <div id="interactive-map" class="h-full w-full"></div>
 
-        <div class="hidden md:block absolute bottom-4 left-4 z-[1000] bg-white/90 backdrop-blur-sm p-4 rounded-lg shadow-lg border w-64">
-            <h4 class="font-bold text-sm mb-3">Legend</h4>
-            <div class="flex flex-col space-y-3 text-xs text-slate-700">
-                <div class="pt-3 border-t border-slate-200/80">
-                    <p class="font-semibold mb-2 uppercase text-slate-500 text-[10px] tracking-wider">Client Projects</p>
-                    <ul class="flex flex-col space-y-2">
-                        <li class="flex items-center"><span class="legend-icon icon-client"></span> Standard Client</li>
-                        <li class="flex items-center"><span class="legend-icon icon-client-alert-warranty"></span> Warranty Expiring</li>
-                        <li class="flex items-center"><span class="legend-icon icon-client-alert-resurface"></span> Resurfacing Due</li>
-                    </ul>
+        <!-- Filter Controls -->
+        <div class="absolute top-4 left-4 z-[1000] bg-slate-800 bg-opacity-80 p-3 rounded-lg shadow-lg backdrop-blur-sm">
+            <h3 class="text-white font-semibold mb-2 text-lg">Filters</h3>
+            <div class="space-y-2">
+                <div v-for="type in Object.keys(filters)" :key="type" class="flex items-center">
+                    <input :id="`filter-${type}`" v-model="filters[type]"
+                        class="h-4 w-4 rounded bg-slate-600 border-slate-500 text-sky-500 focus:ring-sky-500"
+                        type="checkbox" />
+                    <label :for="`filter-${type}`" class="ml-2 text-white capitalize">{{ type.replace(/([A-Z])/g, ' $1').trim()
+                        }}</label>
                 </div>
-                <div class="pt-3 border-t border-slate-200/80">
-                    <p class="font-semibold mb-2 uppercase text-slate-500 text-[10px] tracking-wider">Prospects & Leads</p>
-                    <ul class="flex flex-col space-y-2">
-                         <li class="flex items-center"><span class="legend-icon icon-ai-lead"><div class="icon-inner"></div></span> AI Lead</li>
-                        <li class="flex items-center"><span class="legend-icon icon-permit"></span> Permit Lead</li>
-                        <li class="flex items-center"><span class="legend-icon icon-news"></span> News Lead</li>
-                        <li class="flex items-center"><span class="legend-icon icon-faded"></span> Worn Court</li>
-                    </ul>
+            </div>
+            <button @click="toggleHeatmap"
+                class="w-full mt-3 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2 px-3 rounded-lg shadow-md flex items-center justify-center transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                    class="lucide lucide-thermometer-sun mr-2">
+                    <path d="M12 9a4 4 0 0 0-2 7.5" />
+                    <path d="M12 3v2" />
+                    <path d="M6.6 18.4 4.5 20.5" />
+                    <path d="M18 2a2 2 0 0 1 2 2v10.5a4 4 0 1 1-4 0V4a2 2 0 0 1 2-2Z" />
+                    <path d="m2 14 2.1 2.1" />
+                    <path d="M22 14h-2" />
+                    <path d="M18 6h2" />
+                    <path d="M7 4h3" />
+                </svg>
+                {{ heatmapVisible ? 'Hide' : 'Show' }} Heatmap
+            </button>
+            <button @click="scanMap"
+                class="w-full mt-3 bg-sky-600 hover:bg-sky-500 text-white font-semibold py-2 px-3 rounded-lg shadow-md flex items-center justify-center transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                    class="lucide lucide-scan-search mr-2">
+                    <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+                    <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+                    <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+                    <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+                    <path d="M11 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+                    <path d="m13.5 13.5 2.5 2.5" />
+                </svg>
+                Scan Map
+            </button>
+        </div>
+        
+        <!-- Legend -->
+        <div class="absolute top-4 right-4 z-[1000] bg-slate-800 bg-opacity-80 p-3 rounded-lg shadow-lg backdrop-blur-sm">
+            <h3 class="text-white font-semibold mb-2 text-lg">Legend</h3>
+            <div class="space-y-3">
+                <div v-for="item in legendItems" :key="item.label" class="flex items-center">
+                    <div class="icon-base mr-3" :class="item.class">
+                        <component :is="item.icon" class="w-5 h-5" />
+                    </div>
+                    <span class="text-white">{{ item.label }}</span>
                 </div>
             </div>
         </div>
-        
     </div>
 </template>
 
-<style scoped>
-:global(.icon-base.icon-ai-lead) {
-    background-color: var(--color-icon-permit);
-    border: 3px solid white;
-    box-shadow: 0 0 0 2px var(--color-icon-permit);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-:global(.icon-base.icon-ai-lead .icon-inner) {
-    width: 8px;
-    height: 8px;
-    background-color: white;
-    border-radius: 50%;
-}
-:global(.map-marker-ping) {
-    animation: map-ping 1.5s ease-out infinite;
-}
-@keyframes map-ping {
-    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.7); }
-    70% { transform: scale(1); box-shadow: 0 0 0 12px rgba(139, 92, 246, 0); }
-    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+<script setup lang="ts">
+import { onMounted, ref, watch } from 'vue';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+import 'leaflet.heat';
+import { Building2, Newspaper, FileText, Home, Sparkles } from 'lucide-vue-next';
+import { View } from '@/types';
+
+// --- Hardcoded SVG paths for Lucide icons ---
+const icons = {
+  Building2: '<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/>',
+  Newspaper: '<path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h4"/><path d="M4 9h16"/><path d="M4 15h16"/><path d="M10 9v6"/><path d="M16 9v6"/>',
+  FileText: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  Home: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+  Sparkles: '<path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/>',
+};
+
+// --- Types ---
+interface Prospect {
+    id: number;
+    coords: [number, number];
+    name: string;
+    type: string;
+    [key: string]: any;
 }
 
-/* New Alert Icon Styles */
-:global(.icon-client-alert-resurface) {
-    box-shadow: 0 0 0 3px #dc2626; /* Red-600 */
-}
-:global(.icon-client-alert-warranty) {
-    box-shadow: 0 0 0 3px #f59e0b; /* Amber-500 */
+// --- Props ---
+const props = defineProps<{
+    prospects: Prospect[];
+    focusedProspectId?: number | null;
+}>();
+
+const emit = defineEmits(['setCurrentView']);
+
+// --- Refs ---
+const map = ref<L.Map | null>(null);
+const markerLayer = ref<L.LayerGroup>(L.layerGroup());
+const heatmapLayer = ref<L.HeatLayer | null>(null);
+const heatmapVisible = ref(false);
+const filters = ref<Record<string, boolean>>({});
+
+// --- Legend Data ---
+const legendItems = [
+    { label: 'Client', icon: Building2, class: 'icon-client' },
+    { label: 'News', icon: Newspaper, class: 'icon-news icon-client-due' },
+    { label: 'Permit', icon: FileText, class: 'icon-permit' },
+    { label: 'AI Prospect', icon: Sparkles, class: 'icon-bright' },
+    { label: 'Residential', icon: Home, class: 'icon-residential-good' },
+    { label: 'Tennis Court', icon: Sparkles, class: 'icon-tennis-court-bright' },
+];
+
+const initializeFilters = () => {
+    const prospectTypes = new Set(props.prospects.map(p => p.type));
+    const newFilters: Record<string, boolean> = {};
+    prospectTypes.forEach(type => {
+        newFilters[type] = true;
+    });
+    filters.value = newFilters;
+};
+
+const getIconForProspect = (prospect: Prospect) => {
+    const iconWrapper = document.createElement('div');
+    iconWrapper.className = 'icon-base';
+
+    let iconSvgContent = '';
+    switch (prospect.type) {
+        case 'news':
+            iconWrapper.className += ' icon-news icon-client-due';
+            iconSvgContent = icons.Newspaper;
+            break;
+        case 'permit':
+            iconWrapper.className += ' icon-permit';
+            iconSvgContent = icons.FileText;
+            break;
+        case 'residential':
+             iconWrapper.className += prospect.status === 'good' ? ' icon-residential-good' : ' icon-residential-worn';
+             iconSvgContent = icons.Home;
+             break;
+        case 'tennis_court':
+            iconWrapper.className += ` icon-tennis-court-${prospect.status}`;
+            iconSvgContent = icons.Sparkles;
+            break;
+        default:
+            if (prospect.isClient) {
+                 iconWrapper.className += ' icon-client';
+                 iconSvgContent = icons.Building2;
+            } else {
+                 iconWrapper.className += ' icon-bright';
+                 iconSvgContent = icons.Sparkles;
+            }
+            break;
+    }
+    
+    iconWrapper.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${iconSvgContent}</svg>`;
+    
+    return L.divIcon({
+        html: iconWrapper.outerHTML,
+        className: '',
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+    });
+};
+
+const createPopupContent = (prospect: Prospect): string => {
+    let summary = '';
+    if (prospect.aiSummary) {
+        summary = `<p class="mt-2 text-xs text-slate-500 leading-snug">${prospect.aiSummary}</p>`;
+    } else if (prospect.status) {
+        summary = `<p class="mt-2 text-xs text-slate-500">Condition: <span class="font-semibold">${prospect.status}</span></p>`;
+    }
+
+    return `
+        <div class="w-60 -m-3">
+            <div class="p-3">
+                <h3 class="text-base font-bold text-slate-800">${prospect.name}</h3>
+                <p class="text-sm text-slate-600 capitalize">${prospect.type.replace('_', ' ')}</p>
+                ${summary}
+            </div>
+            <div class="bg-slate-50 p-2 text-center">
+                 <button class="view-details-button text-indigo-600 font-semibold text-sm hover:underline" data-prospect-id="${prospect.id}">
+                    View Details
+                </button>
+            </div>
+        </div>
+    `;
 }
 
+const scanMap = () => {
+    if (!map.value) return;
 
-.legend-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    width: 20px;
-    height: 20px;
-    flex-shrink: 0;
-    margin-right: 8px;
-    border: 2px solid;
-    position: relative;
-}
-.legend-icon.icon-bright { border-color: var(--color-icon-bright); }
-.legend-icon.icon-faded { border-color: var(--color-icon-faded); }
-.legend-icon.icon-client { border-color: var(--color-icon-client); }
-.legend-icon.icon-client-due { border-color: var(--color-icon-client); background-color: #fee2e2; }
-.legend-icon.icon-permit { border-color: var(--color-icon-permit); }
-.legend-icon.icon-news { border-color: var(--color-icon-news); }
-.legend-icon.icon-ai-lead { background-color: var(--color-icon-permit); border-color: white; }
-.legend-icon .icon-inner {
-    width: 6px;
-    height: 6px;
-    background-color: white;
-    border-radius: 50%;
+    const bounds = map.value.getBounds();
+    const southWest = bounds.getSouthWest();
+    const northEast = bounds.getNorthEast();
+    const newProspects: Prospect[] = [];
+
+    for (let i = 0; i < 20; i++) { // Generate 20 mock data points
+        const lat = southWest.lat + Math.random() * (northEast.lat - southWest.lat);
+        const lng = southWest.lng + Math.random() * (northEast.lng - southWest.lng);
+        const statuses = ['bright', 'medium', 'dim'];
+        const status = statuses[Math.floor(Math.random() * statuses.length)];
+
+        newProspects.push({
+            id: Date.now() + i,
+            coords: [lat, lng],
+            name: `Tennis Court ${i + 1}`,
+            type: 'tennis_court',
+            status: status
+        });
+    }
+    
+    props.prospects.length = 0;
+    props.prospects.push(...newProspects);
+
+    initializeFilters();
+    updateMarkers();
+};
+
+const updateMarkers = () => {
+    markerLayer.value.clearLayers();
+    const activeTypes = Object.entries(filters.value)
+        .filter(([, isActive]) => isActive)
+        .map(([type]) => type);
+
+    props.prospects
+        .filter(prospect => prospect.coords && activeTypes.includes(prospect.type))
+        .forEach(prospect => {
+            const marker = L.marker(prospect.coords, { icon: getIconForProspect(prospect) })
+                .addTo(markerLayer.value)
+                .bindPopup(createPopupContent(prospect));
+
+            marker.on('popupopen', (e) => {
+                const button = e.popup.getElement()?.querySelector('.view-details-button');
+                button?.addEventListener('click', () => {
+                    const prospectId = parseInt(button.getAttribute('data-prospect-id') || '0');
+                    if(prospectId) {
+                        emit('setCurrentView', View.ProjectHub, { prospectId });
+                    }
+                });
+            });
+
+            if (props.focusedProspectId === prospect.id) {
+                (marker as any)._icon.classList.add('map-marker-highlight', 'map-marker-ping');
+                 setTimeout(() => {
+                    (marker as any)?._icon.classList.remove('map-marker-ping');
+                }, 500);
+            }
+        });
+};
+
+const toggleHeatmap = () => {
+    heatmapVisible.value = !heatmapVisible.value;
+    if (!map.value || !heatmapLayer.value) return;
+
+    if (heatmapVisible.value) {
+        map.value.addLayer(heatmapLayer.value);
+    } else {
+        map.value.removeLayer(heatmapLayer.value);
+    }
+};
+
+onMounted(() => {
+    initializeFilters();
+
+    if (document.getElementById('interactive-map')) {
+        const initialMap = L.map('interactive-map').setView([33.48, -112.0740], 11);
+        map.value = initialMap;
+
+        const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        });
+
+        const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri'
+        });
+
+        const baseMaps = { "Street View": osm, "Satellite View": satellite };
+        osm.addTo(initialMap);
+
+        const heatPoints = props.prospects
+            .filter(p => p.coords)
+            .map(p => p.coords as L.LatLngTuple);
+        heatmapLayer.value = L.heatLayer(heatPoints, { radius: 25 });
+
+        markerLayer.value.addTo(initialMap);
+        L.control.layers(baseMaps).addTo(initialMap);
+        updateMarkers();
+    }
+});
+
+watch(filters, updateMarkers, { deep: true });
+watch(() => props.prospects, () => {
+    initializeFilters();
+    updateMarkers();
+}, { deep: true });
+watch(() => props.focusedProspectId, updateMarkers);
+</script>
+
+<style>
+#interactive-map {
+    cursor: grab;
 }
 
-/* New Legend Alert Styles */
-.legend-icon.icon-client-alert-resurface {
-    border-color: var(--color-icon-client);
-    box-shadow: 0 0 0 2px #dc2626;
+.icon-tennis-court-bright {
+    background-color: #fde047; /* yellow-300 */
+    color: #ca8a04; /* yellow-600 */
 }
-.legend-icon.icon-client-alert-warranty {
-    border-color: var(--color-icon-client);
-    box-shadow: 0 0 0 2px #f59e0b;
+.icon-tennis-court-medium {
+    background-color: #fde047; /* yellow-300 */
+    color: #ca8a04; /* yellow-600 */
+    opacity: 0.7;
 }
-
+.icon-tennis-court-dim {
+    background-color: #fde047; /* yellow-300 */
+    color: #ca8a04; /* yellow-600 */
+    opacity: 0.4;
+}
 </style>

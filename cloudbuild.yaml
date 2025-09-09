@@ -21,7 +21,7 @@ steps:
     - '--image'
     - 'gcr.io/$PROJECT_ID/court-detector-saas:$COMMIT_SHA'
     - '--region'
-    - 'us-central1' # IMPORTANT: Change this to your preferred Cloud Run region
+    - '${_REGION}' # Use a substitution variable for the region
     - '--platform'
     - 'managed' # Use the fully managed version of Cloud Run
     - '--allow-unauthenticated' # Make the service publicly accessible
@@ -33,7 +33,10 @@ steps:
 images:
   - 'gcr.io/$PROJECT_ID/court-detector-saas:$COMMIT_SHA'
 
+# This section defines the substitution variables that are used in this pipeline.
+substitutions:
+  _REGION: 'us-central1'
+
 # ADD THIS SECTION FOR LOGGING:
 options:
   logging: CLOUD_LOGGING_ONLY
-
