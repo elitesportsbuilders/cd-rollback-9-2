@@ -15,4 +15,5 @@ export enum View {
   Integrations = 'Integrations',
   PipedriveAuth = 'PipedriveAuth',
   MonthlyReport = 'MonthlyReport',
+  ProjectHub = 'ProjectHub',
 }

@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { 
+    COMPETITOR_SEO_DATA, 
+    CONTRACTOR_STATUS_DATA, 
+    COMPETITOR_INTEL_EVENTS, 
+    COMPETITORS as ALL_COMPETITOR_NAMES 
+} from '@/data';
+import { 
     Target, 
     TrendingUp,
     ArrowUp,
@@ -23,58 +29,6 @@ import {
 import { Chart, registerables } from 'chart.js';
 
 Chart.register(...registerables);
-
-// --- FIX: All necessary data is now moved directly into this component to bypass caching issues ---
-
-const ALL_COMPETITOR_NAMES = ["Ace Resurfacing Co.", "Sunstate Courts", "C&S Sport Surfaces", "Pro Courts Arizona", "Arizona Court Masters"];
-
-const CONTRACTOR_STATUS_DATA = [
-    { id: 'comp1', name: "Ace Resurfacing Co.", licenseNumber: "AZ-123456", status: "Active", violations: [], lawsuits: [] },
-    { id: 'comp2', name: "Sunstate Courts", licenseNumber: "AZ-654321", status: "Active", violations: [], lawsuits: [] },
-    { id: 'comp3', name: "C&S Sport Surfaces", licenseNumber: "AZ-789012", status: "Suspended", violations: [{ date: "07/15/2025", description: "Failure to complete project", resolution: "License suspended pending review" }], lawsuits: [] },
-    { id: 'comp4', name: "Pro Courts Arizona", licenseNumber: "AZ-345678", status: "Active", violations: [], lawsuits: [{ caseNumber: "CV-2025-001234", filingDate: "06/20/2025", court: "Maricopa Superior Court", description: "Breach of contract dispute with a supplier.", status: "Active" }] },
-    { id: 'comp5', name: "Arizona Court Masters", licenseNumber: "N/A", status: "Pending", violations: [], lawsuits: [] }
-];
-
-const COMPETITOR_INTEL_EVENTS = {
-  'comp1': [
-    { id: 1, type: 'License Update', date: '2025-09-06', summary: 'Contractor license renewed with the AZ ROC.', details: 'ROC #12345 renewed for 2 years, no changes in classification.' },
-    { id: 2, type: 'New Ad Campaign', date: '2025-09-04', summary: 'Launched a new Google Ads campaign targeting "pickleball court resurfacing Phoenix".', details: 'Ad copy focuses on a "24-hour quote guarantee". Budget appears to be moderate.' },
-  ],
-  'comp2': [
-    { id: 4, type: 'Permit Filed', date: '2025-09-05', summary: 'Filed a commercial permit with the City of Glendale for a new multi-court facility.', details: 'Permit #GL-2025-08-112 for "athletic court construction". Valuation: $250,000.' },
-  ],
-  'comp3': [
-    { id: 6, type: 'SEO Ranking Change', date: '2025-09-02', summary: 'Lost ranking for "running track repair", dropping off the first page.', details: 'AI Analysis: Their website\'s page on track maintenance has not been updated in over a year.' },
-  ],
-};
-
-const COMPETITOR_SEO_DATA = {
-  keywords: ['tennis court resurfacing phoenix', 'pickleball court construction az', 'running track repair arizona'],
-  rankings: [
-      { competitor: 'Ace Resurfacing Co.', keyword: 'tennis court resurfacing phoenix', rank: 2, change: 1, url: '/services/tennis-resurfacing' },
-      { competitor: 'Sunstate Courts', keyword: 'tennis court resurfacing phoenix', rank: 5, change: -1, url: '/tennis-courts' },
-      { competitor: 'C&S Sport Surfaces', keyword: 'tennis court resurfacing phoenix', rank: 6, change: 0, url: '/portfolio/phoenix-courts' },
-      { competitor: 'Ace Resurfacing Co.', keyword: 'pickleball court construction az', rank: 3, change: 0, url: '/pickleball' },
-      { competitor: 'Sunstate Courts', keyword: 'pickleball court construction az', rank: 1, change: 0, url: '/services/pickleball-construction' },
-      { competitor: 'C&S Sport Surfaces', keyword: 'running track repair arizona', rank: 9, change: -2, url: '/services/tracks' },
-  ],
-  history: {
-      'tennis court resurfacing phoenix': {
-          labels: ['June', 'July', 'August', 'September'],
-          datasets: [ { label: 'Ace Resurfacing Co.', data: [4, 3, 3, 2] }, { label: 'Sunstate Courts', data: [5, 5, 4, 5] }, { label: 'C&S Sport Surfaces', data: [6, 6, 6, 6] }, ]
-      },
-      'pickleball court construction az': {
-          labels: ['June', 'July', 'August', 'September'],
-          datasets: [ { label: 'Ace Resurfacing Co.', data: [3, 3, 3, 3] }, { label: 'Sunstate Courts', data: [1, 1, 1, 1] }, ]
-      },
-       'running track repair arizona': {
-          labels: ['June', 'July', 'August', 'September'],
-          datasets: [ { label: 'C&S Sport Surfaces', data: [7, 7, 7, 9] }, ]
-      }
-  }
-};
-
 
 // --- PROPS & EMITS ---
 const props = defineProps<{
@@ -186,7 +140,7 @@ watch([selectedKeyword, activeTab], () => {
 <template>
     <div class="flex h-full bg-slate-50">
         <!-- Left Panel: Shared for both tabs -->
-        <div class="w-1/3 border-r border-slate-200 h-full flex flex-col">
+        <div class="w-full md:w-1/3 border-r border-slate-200 h-full flex flex-col">
             <header class="p-4 border-b border-slate-200 flex-shrink-0">
                 <h1 class="text-xl font-bold text-slate-800 flex items-center">
                     <Target class="w-6 h-6 mr-3 text-indigo-600" />
@@ -205,17 +159,17 @@ watch([selectedKeyword, activeTab], () => {
             <div v-if="activeTab === 'Activity'" class="flex-1 flex flex-col min-h-0">
                 <div class="p-4 flex-shrink-0">
                      <div class="relative">
-                        <input v-model="searchTerm" type="text" placeholder="Search to add..." class="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                        <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                    </div>
-                    <div v-if="searchTerm && filteredCompetitors.length > 0" class="mt-2 bg-white border border-slate-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
-                        <div v-for="name in filteredCompetitors" :key="name" class="flex items-center justify-between p-2 hover:bg-slate-50">
-                            <span class="text-sm font-medium text-slate-700">{{ name }}</span>
-                            <button @click="addCompetitor(name)" class="p-1 rounded-full text-slate-400 hover:bg-indigo-100 hover:text-indigo-600">
-                                <Plus class="w-4 h-4" />
-                            </button>
-                        </div>
-                    </div>
+                         <input v-model="searchTerm" type="text" placeholder="Search to add..." class="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                         <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                     </div>
+                     <div v-if="searchTerm && filteredCompetitors.length > 0" class="mt-2 bg-white border border-slate-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                         <div v-for="name in filteredCompetitors" :key="name" class="flex items-center justify-between p-2 hover:bg-slate-50">
+                             <span class="text-sm font-medium text-slate-700">{{ name }}</span>
+                             <button @click="addCompetitor(name)" class="p-1 rounded-full text-slate-400 hover:bg-indigo-100 hover:text-indigo-600">
+                                 <Plus class="w-4 h-4" />
+                             </button>
+                         </div>
+                     </div>
                 </div>
                 <div class="flex-1 overflow-y-auto p-4 pt-0 space-y-2">
                      <p class="px-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">Tracked Companies</p>
@@ -253,7 +207,7 @@ watch([selectedKeyword, activeTab], () => {
         </div>
 
         <!-- Right Panel: Conditional Content -->
-        <div class="w-2/3 h-full overflow-y-auto">
+        <div class="w-full md:w-2/3 h-full overflow-y-auto">
             <!-- Activity Feed View -->
             <div v-if="activeTab === 'Activity'">
                 <div v-if="selectedCompetitorDetails" class="p-6 space-y-6">
@@ -302,33 +256,33 @@ watch([selectedKeyword, activeTab], () => {
                     </div>
                     <div class="lg:col-span-2 space-y-6">
                          <div class="bg-white p-6 rounded-lg shadow-md border border-slate-200">
-                            <h2 class="text-xl font-bold text-slate-800 mb-4">Current Rankings</h2>
-                            <table class="w-full text-sm">
-                                <thead class="text-left text-xs text-slate-500 uppercase border-b border-slate-200">
-                                    <tr>
-                                        <th class="p-2 text-center">Rank</th><th class="p-2">Company</th><th class="p-2 text-center">Change</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="seo in currentRankings" :key="seo.competitor" class="border-b border-slate-100 last:border-b-0">
-                                        <td class="p-2 text-center font-bold text-lg" :class="{'text-indigo-600': seo.rank <= 3}">{{ seo.rank }}</td>
-                                        <td class="p-2 font-medium text-slate-700">
-                                            <a :href="`#`" target="_blank" class="hover:underline hover:text-indigo-600">{{ seo.competitor }}</a>
-                                        </td>
-                                        <td class="p-2 text-center font-semibold flex items-center justify-center" :class="{'text-green-600': seo.change > 0, 'text-red-600': seo.change < 0, 'text-slate-400': seo.change === 0}">
-                                            <ArrowUp v-if="seo.change > 0" class="w-4 h-4 mr-1"/><ArrowDown v-if="seo.change < 0" class="w-4 h-4 mr-1"/><Minus v-if="seo.change === 0" class="w-4 h-4 mr-1"/>
-                                            <span>{{ seo.change !== 0 ? Math.abs(seo.change) : '' }}</span>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                             </table>
+                             <h2 class="text-xl font-bold text-slate-800 mb-4">Current Rankings</h2>
+                             <table class="w-full text-sm">
+                                 <thead class="text-left text-xs text-slate-500 uppercase border-b border-slate-200">
+                                     <tr>
+                                         <th class="p-2 text-center">Rank</th><th class="p-2">Company</th><th class="p-2 text-center">Change</th>
+                                     </tr>
+                                 </thead>
+                                 <tbody>
+                                     <tr v-for="seo in currentRankings" :key="seo.competitor" class="border-b border-slate-100 last:border-b-0">
+                                         <td class="p-2 text-center font-bold text-lg" :class="{'text-indigo-600': seo.rank <= 3}">{{ seo.rank }}</td>
+                                         <td class="p-2 font-medium text-slate-700">
+                                             <a :href="`#`" target="_blank" class="hover:underline hover:text-indigo-600">{{ seo.competitor }}</a>
+                                         </td>
+                                         <td class="p-2 text-center font-semibold flex items-center justify-center" :class="{'text-green-600': seo.change > 0, 'text-red-600': seo.change < 0, 'text-slate-400': seo.change === 0}">
+                                             <ArrowUp v-if="seo.change > 0" class="w-4 h-4 mr-1"/><ArrowDown v-if="seo.change < 0" class="w-4 h-4 mr-1"/><Minus v-if="seo.change === 0" class="w-4 h-4 mr-1"/>
+                                             <span>{{ seo.change !== 0 ? Math.abs(seo.change) : '' }}</span>
+                                         </td>
+                                     </tr>
+                                 </tbody>
+                               </table>
                          </div>
                          <div class="bg-indigo-50 border-l-4 border-indigo-400 p-6 rounded-lg">
-                            <h2 class="text-xl font-bold text-slate-800 flex items-center mb-2">
-                                <Sparkles class="w-5 h-5 mr-2 text-indigo-600" />
-                                AI Strategic Insights
-                            </h2>
-                            <p class="text-sm text-slate-700">{{ aiSummary }}</p>
+                             <h2 class="text-xl font-bold text-slate-800 flex items-center mb-2">
+                                 <Sparkles class="w-5 h-5 mr-2 text-indigo-600" />
+                                 AI Strategic Insights
+                             </h2>
+                             <p class="text-sm text-slate-700">{{ aiSummary }}</p>
                          </div>
                     </div>
                 </div>
@@ -336,4 +290,3 @@ watch([selectedKeyword, activeTab], () => {
         </div>
     </div>
 </template>
-

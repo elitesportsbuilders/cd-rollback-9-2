@@ -6,10 +6,10 @@ import { ref, computed, reactive, watch, onMounted, defineAsyncComponent } from 
 import { Menu, Radar } from 'lucide-vue-next';
 import Sidebar from '@/components/Sidebar.vue';
 import { View } from '@/types';
-import { ALL_PROSPECTS, COMPETITORS, USER_INTEL_DATA } from '@/data';
+import { ALL_PROSPECTS, COMPETITORS, USER_INTEL_DATA, ACTIVITY_FEED_DATA } from '@/data';
 
 // --- 2. FIREBASE IMPORTS ---
-import { initializeApp, FirebaseApp } from 'firebase/app';
+import { initializeApp } from 'firebase/app';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getAuth, signInWithCustomToken, signInAnonymously, Auth } from 'firebase/auth';
 
@@ -38,10 +38,8 @@ onMounted(async () => {
 
       if (typeof __initial_auth_token__ !== 'undefined' && __initial_auth_token__) {
         await signInWithCustomToken(auth.value, __initial_auth_token__);
-        console.log('Successfully signed in with custom token.');
       } else {
         await signInAnonymously(auth.value);
-        console.log('Successfully signed in anonymously.');
       }
       isFirebaseConnected.value = true;
     } catch (error) {
@@ -69,6 +67,7 @@ const viewMap: Record<string, any> = {
   [View.Integrations]: defineAsyncComponent(() => import('@/components/Integrations.vue')),
   [View.PipedriveAuth]: defineAsyncComponent(() => import('@/components/PipedriveAuth.vue')),
   [View.MonthlyReport]: defineAsyncComponent(() => import('@/components/MonthlyReport.vue')),
+  [View.ProjectHub]: defineAsyncComponent(() => import('@/components/ProjectHub.vue')),
 };
 
 // --- INTERFACES & HELPERS ---
@@ -76,6 +75,7 @@ interface Prospect {
   id: number;
   type: string;
   isSynced?: boolean;
+  isAcknowledged?: boolean;
   [key: string]: any;
 }
 
@@ -156,6 +156,15 @@ const handleRemoveProspect = (prospectId: number) => {
     appState.prospects = appState.prospects.filter(p => p.id !== prospectId);
 };
 
+const handleAcknowledgeLead = (leadId: number) => {
+    appState.prospects = appState.prospects.map(p => {
+        if (p.id === leadId) {
+            return { ...p, isAcknowledged: true };
+        }
+        return p;
+    });
+};
+
 const setCurrentView = (view: string, payload: any = {}) => {
   appState.currentView = view;
   focusedProspectId.value = payload.prospectId || null;
@@ -177,19 +186,27 @@ const currentComponent = computed(() => {
 
 const componentProps = computed(() => {
   switch (appState.currentView) {
+    case View.Dashboard:
+        return { 
+            activityFeed: ACTIVITY_FEED_DATA,
+            userName: "Mike Woelfel",
+            prospects: appState.prospects, // <-- Pass prospect data
+        };
     case View.LeadIntelligence:
-      return { leads: appState.prospects.filter(isLead) };
+      return { leads: appState.prospects.filter(p => isLead(p) || 'isAcknowledged' in p) };
     case View.ResidentialProspecting:
       return { prospects: appState.prospects };
     case View.InteractiveMap:
-      return isFirebaseConnected.value 
-        ? { focusedProspectId: focusedProspectId.value, db: db.value, appId: appId.value }
-        : { focusedProspectId: focusedProspectId.value, prospects: appState.prospects };
+      return { 
+          focusedProspectId: focusedProspectId.value,
+          prospects: appState.prospects 
+      };
+    case View.ProjectHub:
+      return { project: appState.prospects.find(p => p.id === focusedProspectId.value) };
     case View.Integrations:
       return { isConnected: appState.integrationState.isPipedriveConnected };
     case View.CompetitorIntel:
-      // --- FIX: The new dashboard needs the trackedCompetitors list for the 'Activity' tab ---
-      return { trackedCompetitors: appState.trackedCompetitors }; 
+      return { trackedCompetitors: appState.trackedCompetitors };
     case View.MyIntel:
       return { userIntel: appState.userIntel };
     case View.MonthlyReport:
@@ -208,46 +225,45 @@ const pageTitle = computed(() => {
 });
 
 const mainContentClass = computed(() => {
-    const isFullBleed = [View.InteractiveMap, View.ResidentialProspecting].includes(appState.currentView as any);
+    const isFullBleed = [View.InteractiveMap, View.ResidentialProspecting, View.ProjectHub].includes(appState.currentView as any);
     return isFullBleed ? 'flex-1 flex flex-col min-h-0' : 'flex-1 overflow-y-auto';
 });
 </script>
 
 <template>
-    <div v-if="isAuthReady" class="relative min-h-screen md:flex bg-slate-100">
-        <Sidebar 
-            :current-view="appState.currentView" 
-            @set-current-view="setCurrentView" 
-            :is-open="isSidebarOpen"
-        />
-        
-        <div v-if="isSidebarOpen" @click="isSidebarOpen = false" class="fixed inset-0 bg-black bg-opacity-50 z-20 md:hidden"></div>
-        
-        <main class="flex-1 flex flex-col min-w-0">
-            <header class="md:hidden flex justify-between items-center p-4 bg-white border-b border-slate-200 sticky top-0 z-10">
-                <button @click="isSidebarOpen = true" class="text-slate-600 p-1 -ml-1">
-                    <Menu class="w-6 h-6" />
-                </button>
-                <div class="flex items-center">
-                    <Radar class="w-6 h-6 mr-2 text-indigo-600" />
-                    <h1 class="text-lg font-bold text-slate-800">{{ pageTitle }}</h1>
-                </div>
-                <div class="w-6"></div>
-            </header>
-            
-            <component 
-              :is="currentComponent"
-              :class="mainContentClass"
-              v-bind="componentProps"
-              @set-current-view="setCurrentView"
-              @sync-lead="handleSyncLead"
-              @add-intel="addIntel"
-              @set-integration-state="setIntegrationState"
-              @update-tracked-competitors="updateTrackedCompetitors"
-              @add-prospect="handleAddProspect"
-              @remove-prospect="handleRemoveProspect"
+    <div v-if="isAuthReady">
+        <div :class="{ 'h-screen overflow-hidden md:overflow-auto': isSidebarOpen }" class="relative min-h-screen bg-slate-100 md:flex">
+            <Sidebar 
+                :current-view="appState.currentView" 
+                @set-current-view="setCurrentView" 
+                :is-open="isSidebarOpen"
             />
-        </main>
+            <div v-if="isSidebarOpen" @click="isSidebarOpen = false" class="fixed inset-0 bg-black bg-opacity-50 z-20 md:hidden"></div>
+            <main class="flex-1 flex flex-col min-w-0">
+                <header class="md:hidden flex justify-between items-center p-4 bg-white border-b border-slate-200 sticky top-0 z-10">
+                    <button @click="isSidebarOpen = true" class="text-slate-600 p-1 -ml-1"><Menu class="w-6 h-6" /></button>
+                    <div class="flex items-center">
+                        <Radar class="w-6 h-6 mr-2 text-indigo-600" />
+                        <h1 class="text-lg font-bold text-slate-800">{{ pageTitle }}</h1>
+                    </div>
+                    <div class="w-6"></div>
+                </header>
+                
+                <component 
+                    :is="currentComponent"
+                    :class="mainContentClass"
+                    v-bind="componentProps"
+                    @set-current-view="setCurrentView"
+                    @sync-lead="handleSyncLead"
+                    @add-intel="addIntel"
+                    @set-integration-state="setIntegrationState"
+                    @update-tracked-competitors="updateTrackedCompetitors"
+                    @add-prospect="handleAddProspect"
+                    @remove-prospect="handleRemoveProspect"
+                    @acknowledge-lead="handleAcknowledgeLead"
+                />
+            </main>
+        </div>
     </div>
     
     <div v-else class="flex items-center justify-center min-h-screen bg-slate-100">
@@ -260,4 +276,3 @@ const mainContentClass = computed(() => {
         </div>
     </div>
 </template>
-
