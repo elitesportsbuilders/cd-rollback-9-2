@@ -1,475 +1,431 @@
-<template>
-  <!-- Main Application Container -->
-  <div v-if="isAuthReady">
-    <div :class="{ 'h-screen overflow-hidden md:overflow-auto': isSidebarOpen }" class="relative min-h-screen bg-slate-100 md:flex font-inter">
-      <!-- Sidebar -->
-      <aside :class="isOpenClass" class="fixed inset-y-0 left-0 z-30 w-64 md:w-60 bg-white border-r border-slate-200 transition-transform duration-200 ease-in-out md:translate-x-0 flex flex-col p-4 shadow-lg">
-        <div class="flex items-center justify-between h-16 mb-4">
-          <div class="flex items-center">
-            <Radar class="h-8 w-8 text-indigo-600" />
-            <span class="ml-2 text-2xl font-bold text-slate-800">Vue App</span>
-          </div>
-        </div>
-        <nav class="flex-1 overflow-y-auto">
-          <ul>
-            <li v-for="item in navItems" :key="item.view">
-              <a @click.prevent="setCurrentView(item.view)" href="#"
-                :class="{ 'bg-indigo-100 text-indigo-700 font-semibold shadow-inner': appState.currentView === item.view }"
-                class="flex items-center p-3 text-sm text-slate-700 rounded-xl hover:bg-slate-100 transition-colors duration-200 group">
-                <component :is="item.icon" class="w-5 h-5 mr-3 text-slate-500 group-hover:text-indigo-600 transition-colors" />
-                {{ item.name }}
-              </a>
-            </li>
-          </ul>
-        </nav>
-        <div class="flex items-center p-4 border-t border-slate-200 mt-auto">
-          <div class="flex-1 text-xs text-center text-slate-500">
-            <p>Logged in as: User {{ userId }}</p>
-          </div>
-        </div>
-      </aside>
-
-      <!-- Sidebar Overlay for Mobile -->
-      <div v-if="isSidebarOpen" @click="isSidebarOpen = false" class="fixed inset-0 bg-black bg-opacity-50 z-20 md:hidden"></div>
-
-      <!-- Main Content Area -->
-      <main class="flex-1 flex flex-col min-w-0">
-        <!-- Mobile Header -->
-        <header class="md:hidden flex justify-between items-center p-4 bg-white border-b border-slate-200 sticky top-0 z-10">
-          <button @click="isSidebarOpen = true" class="text-slate-600 p-1 -ml-1">
-            <Menu class="w-6 h-6" />
-          </button>
-          <div class="flex items-center">
-            <Radar class="w-6 h-6 mr-2 text-indigo-600" />
-            <h1 class="text-lg font-bold text-slate-800">{{ pageTitle }}</h1>
-          </div>
-          <div class="w-6"></div>
-        </header>
-
-        <!-- Dashboard Template -->
-        <div v-if="appState.currentView === View.Dashboard" class="p-6 md:p-8 flex-1 overflow-y-auto">
-          <h1 class="text-3xl font-extrabold text-slate-800 mb-6">Dashboard</h1>
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
-            <div class="bg-white p-6 rounded-xl shadow-lg flex flex-col items-center text-center">
-              <span class="text-indigo-600 mb-2">
-                <Building2 class="w-12 h-12" />
-              </span>
-              <p class="text-slate-500">Total Prospects</p>
-              <p class="text-4xl font-bold text-slate-800">{{ appState.prospects.length }}</p>
-            </div>
-          </div>
-          <div class="bg-white rounded-xl shadow-lg p-6">
-            <div class="flex items-center justify-between mb-4">
-              <h2 class="text-xl font-bold text-slate-800">Recent Prospects</h2>
-            </div>
-            <div v-if="recentProspects.length > 0" class="space-y-4">
-              <div v-for="prospect in recentProspects" :key="prospect.id" class="flex items-center space-x-4 p-4 border rounded-lg shadow-sm bg-slate-50">
-                <div class="flex-shrink-0">
-                  <MapPin class="w-8 h-8 text-indigo-500" />
-                </div>
-                <div class="flex-1 min-w-0">
-                  <h3 class="text-lg font-bold text-slate-800 truncate">{{ prospect.propertyAddress }}</h3>
-                  <p class="text-sm text-slate-600 truncate">{{ prospect.permitType }}</p>
-                </div>
-                <div class="text-xs text-slate-400">
-                  <span class="inline-block px-2 py-1 rounded-full text-xs font-semibold" :class="{ 'bg-blue-200 text-blue-800': prospect.type === 'permit', 'bg-purple-200 text-purple-800': prospect.type === 'news' }">
-                    {{ prospect.type }}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div v-else class="text-center py-8 text-slate-500">
-              <p>No prospects found.</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Combined Map Template -->
-        <div v-else-if="[View.ResidentialProspecting, View.InteractiveMap].includes(appState.currentView)" class="flex-1 flex flex-col min-h-0 relative">
-          <!-- Map section -->
-          <div id="map" class="flex-1 rounded-lg shadow-lg overflow-hidden" />
-          
-          <!-- Control Panel at the bottom -->
-          <div class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white rounded-xl shadow-lg p-2 flex items-center space-x-2 z-[1000] border border-gray-200">
-            
-            <!-- Toggle Filter Panel -->
-            <button 
-              @click="toggleFilterPanel" 
-              class="p-2 rounded-lg transition-colors"
-              :class="{'bg-indigo-500 text-white': showFilterPanel, 'bg-gray-200 text-gray-700': !showFilterPanel}"
-            >
-              <component :is="filterIcon" class="w-5 h-5" />
-            </button>
-
-            <!-- Toggle Heatmap -->
-            <button 
-              @click="toggleHeatmap" 
-              class="p-2 rounded-lg transition-colors"
-              :class="{'bg-indigo-500 text-white': isHeatmapActive, 'bg-gray-200 text-gray-700': !isHeatmapActive}"
-            >
-              <ThermometerSun class="w-5 h-5" />
-            </button>
-
-            <!-- Toggle Radar -->
-            <button 
-              @click="toggleRadar" 
-              class="p-2 rounded-lg transition-colors"
-              :class="{'bg-indigo-500 text-white': isRadarActive, 'bg-gray-200 text-gray-700': !isRadarActive}"
-            >
-              <Target class="w-5 h-5" />
-            </button>
-
-            <!-- Search Input and Button -->
-            <div class="flex items-center space-x-2">
-              <input
-                v-model="searchQuery"
-                type="text"
-                placeholder="Search..."
-                class="w-40 px-3 py-2 border rounded-lg text-sm transition-all focus:ring focus:ring-indigo-300"
-              />
-              <button
-                @click="clearSearch"
-                class="p-2 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors"
-              >
-                <X class="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-
-          <!-- Right-side Panel for filters and prospects list -->
-          <div 
-            v-if="showFilterPanel"
-            class="absolute right-4 top-4 w-1/4 max-w-sm h-[90%] bg-white rounded-xl shadow-xl p-4 flex flex-col transition-transform duration-300 ease-in-out z-[999] border border-gray-200"
-          >
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="font-bold text-lg text-gray-800">Prospect Filters</h3>
-              <button @click="toggleFilterPanel" class="text-gray-500 hover:text-gray-800">
-                <X class="w-6 h-6" />
-              </button>
-            </div>
-            
-            <div class="flex-1 overflow-y-auto space-y-2">
-              <div 
-                v-for="prospect in filteredProspects" 
-                :key="prospect.id"
-                class="p-4 bg-white rounded-md shadow-sm border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors"
-                :class="{ 'bg-blue-100': focusedProspectId === prospect.id }"
-                @click="focusOnProspect(prospect)"
-              >
-                <h3 class="font-bold text-gray-900">{{ prospect.propertyAddress }}</h3>
-                <p class="text-sm text-gray-600">{{ prospect.permitType }}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Placeholder for other views -->
-        <div v-else class="p-6 md:p-8 flex-1 overflow-y-auto">
-          <h1 class="text-3xl font-extrabold text-slate-800 mb-6">{{ pageTitle }}</h1>
-          <p class="text-slate-500">This view is a placeholder for future content.</p>
-        </div>
-      </main>
-    </div>
-  </div>
-
-  <!-- Loading state before Firebase authentication -->
-  <div v-else class="flex items-center justify-center min-h-screen bg-slate-100">
-    <div class="text-center">
-      <svg class="animate-spin h-8 w-8 text-indigo-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-      </svg>
-      <p class="mt-2 text-slate-600 font-semibold">Authenticating...</p>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
-// --- GLOBAL IMPORTS ---
-import { ref, computed, reactive, onMounted, watch } from 'vue';
-import { Menu, Radar, LayoutDashboard, MapPin, Target, FileText, Settings, Building2, Map, Users, CircleDot, X, ThermometerSun, Filter, FilterX } from 'lucide-vue-next';
+import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue';
+import PrimaryButton from '@/components/PrimaryButton.vue';
+import { View } from '@/types';
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import 'leaflet-draw';
 import 'leaflet.heat';
-import 'leaflet-draw/dist/leaflet.draw.css';
+import { createIcons, icons } from 'lucide';
 
-// --- FIREBASE IMPORTS ---
-import { initializeApp } from 'firebase/app';
-import { getFirestore, Firestore, collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
-import { getAuth, signInWithCustomToken, signInAnonymously, Auth, onAuthStateChanged } from 'firebase/auth';
+// --- PROPS & EMITS ---
+const props = defineProps<{
+    prospects: any[];
+    focusedProspectId?: string | null;
+    mode: 'residential' | 'commercial';
+}>();
 
-// --- DECLARE GLOBAL VARIABLES ---
-declare const __firebase_config__: string;
-declare const __app_id__: string;
-declare const __initial_auth_token__: string;
+const emit = defineEmits(['setCurrentView', 'addProspect', 'removeProspect', 'updateProspect']);
 
-// --- DATA AND TYPE DEFINITIONS ---
-enum View {
-  Dashboard = 'Dashboard',
-  ResidentialProspecting = 'ResidentialProspecting',
-  InteractiveMap = 'InteractiveMap',
-  Reports = 'Reports',
-  Settings = 'Settings',
-  LeadIntelligence = 'LeadIntelligence',
-  CompetitorIntel = 'CompetitorIntel',
-  MyIntel = 'MyIntel',
-  AiInspection = 'AiInspection',
-  Integrations = 'Integrations',
-  PipedriveAuth = 'PipedriveAuth',
-  MonthlyReport = 'MonthlyReport',
-  ProjectHub = 'ProjectHub',
-  SeoDashboard = 'SeoDashboard',
-}
+
+// --- TYPES ---
+type ProspectStatus = 'New' | 'Contacted' | 'Proposal Sent' | 'Not Interested';
+type ScanStatus = 'idle' | 'scanning' | 'complete';
+type ScanMethod = 'view' | 'draw';
 
 interface Prospect {
   id: string;
   type: string;
-  isSynced?: boolean;
-  isAcknowledged?: boolean;
-  latitude: number;
-  longitude: number;
-  [key: string]: any;
+  coords: [number, number];
+  name: string;
+  homeowner: string;
+  address: string;
+  courtType: string;
+  conditionScore: number;
+  status: ProspectStatus | 'good' | 'worn';
+  aiSummary: string;
+  notes?: string;
+  isClient?: boolean;
+  isDue?: boolean;
 }
 
-interface AppState {
-  currentView: View;
-  prospects: Prospect[];
-}
+// --- REFS & STATE ---
+const mapContainerRef = ref<HTMLElement | null>(null);
+let map: L.Map | null = null;
+let markerLayer: L.LayerGroup | null = null;
+let heatmapLayer: any | null = null;
+let drawnItems: L.FeatureGroup | null = null;
+let drawControl: any = null;
+let markerRefs: { [key: string]: L.Marker } = {};
+let resizeObserver: ResizeObserver | null = null;
 
-const ALL_PROSPECTS: Prospect[] = [
-  { id: '1', type: 'permit', propertyAddress: '123 E Main St, Phoenix, AZ', latitude: 33.4484, longitude: -112.0740, permitType: 'New Construction', isSynced: false },
-  { id: '2', type: 'permit', propertyAddress: '456 N 1st Ave, Scottsdale, AZ', latitude: 33.4942, longitude: -111.9261, permitType: 'Renovation', isSynced: false },
-  { id: '3', type: 'news', propertyAddress: '789 S 3rd St, Tempe, AZ', latitude: 33.4152, longitude: -111.9056, permitType: 'Expansion', isSynced: false },
-  { id: '4', type: 'news', propertyAddress: '101 E Camelback Rd, Phoenix, AZ', latitude: 33.5097, longitude: -112.0673, permitType: 'New Construction', isSynced: false },
-  { id: '5', type: 'permit', propertyAddress: '202 W Washington St, Phoenix, AZ', latitude: 33.4484, longitude: -112.0734, permitType: 'Renovation', isSynced: false },
-];
+const scanStatus = ref<ScanStatus>('idle');
+const residentialResults = ref<Prospect[]>([]);
+const activeSidebarTab = ref('results');
+const selectedProspect = ref<Prospect | null>(null);
+const isModalOpen = ref(false);
+const isGeneratingEmail = ref(false);
+const generatedEmail = ref('');
+const highlightedProspectId = ref<string | null>(props.focusedProspectId || null);
+const drawnAreaGeoJSON = ref<any>(null);
+const scanMethod = ref<ScanMethod>('view');
 
-// --- APP STATE & FIRESTORE INITIALIZATION ---
-const db = ref<Firestore | null>(null);
-const auth = ref<Auth | null>(null);
-const userId = ref<string | null>(null);
-const appId = ref<string>('default-app-id');
-const isAuthReady = ref(false);
+// Commercial Mode State
+const filters = ref<Record<string, boolean>>({});
+const isHeatmapVisible = ref(false);
 
-const loadInitialState = (): AppState => ({
-  currentView: View.Dashboard,
-  prospects: [],
+// --- COMPUTED PROPERTIES ---
+const currentProspects = computed(() => {
+    if (props.mode === 'residential') {
+        return activeSidebarTab.value === 'results' ? residentialResults.value : savedProspects.value;
+    }
+    const activeTypes = Object.keys(filters.value).filter(type => filters.value[type]);
+    if (activeTypes.length === 0) return props.prospects.filter(p => p.type !== 'residential');
+    return props.prospects.filter(p => p.type !== 'residential' && activeTypes.includes(p.type));
 });
-const appState = reactive<AppState>(loadInitialState());
 
-onMounted(async () => {
-  if (typeof __firebase_config__ !== 'undefined' && __firebase_config__) {
-    try {
-      const firebaseConfig = JSON.parse(__firebase_config__);
-      const firebaseApp = initializeApp(firebaseConfig);
-      db.value = getFirestore(firebaseApp);
-      auth.value = getAuth(firebaseApp);
-      appId.value = typeof __app_id__ !== 'undefined' ? __app_id__ : 'default-app-id';
+const savedProspects = computed(() => props.prospects.filter(p => p.type === props.mode));
 
-      onAuthStateChanged(auth.value, async (user) => {
-        if (user) {
-          userId.value = user.uid;
-        } else {
-          userId.value = crypto.randomUUID();
-          await signInAnonymously(auth.value!);
+const scanButtonLabel = computed(() => {
+    if (scanStatus.value === 'scanning') return 'Scanning...';
+    if (scanMethod.value === 'draw') return 'Scan Selected Area';
+    return 'Scan Map View';
+});
+
+const isScanButtonDisabled = computed(() => {
+    if (scanStatus.value === 'scanning') return true;
+    if (scanMethod.value === 'draw' && !drawnAreaGeoJSON.value) return true;
+    return false;
+});
+
+const legendItems = computed(() => {
+    if (props.mode === 'residential') {
+        return [
+            { label: 'Good Condition', class: 'icon-residential-good', icon: 'home' },
+            { label: 'Worn Condition', class: 'icon-residential-worn', icon: 'home' },
+        ];
+    }
+    return [
+        { label: 'Client Project', class: 'icon-client', icon: 'building-2' },
+        { label: 'Service Due', class: 'icon-client-due', icon: 'wrench' },
+        { label: 'Permit Lead', class: 'icon-permit', icon: 'file-text' },
+        { label: 'News Lead', class: 'icon-news', icon: 'newspaper' },
+    ];
+});
+
+// --- HELPER FUNCTIONS ---
+const getStatusClass = (status: string) => {
+    const statusMap: { [key: string]: string } = {
+        'New': 'bg-blue-100 text-blue-800',
+        'Contacted': 'bg-yellow-100 text-yellow-800',
+        'Proposal Sent': 'bg-purple-100 text-purple-800',
+        'Not Interested': 'bg-gray-100 text-gray-800',
+    };
+    return statusMap[status] || 'bg-gray-100 text-gray-800';
+};
+
+const isSaved = (prospectId: string) => props.prospects.some(p => p.id === prospectId);
+
+const saveProspect = (prospectToSave: Prospect) => {
+    if (!isSaved(prospectToSave.id)) {
+        emit('addProspect', { ...prospectToSave, status: 'New' as ProspectStatus, notes: '' });
+    }
+};
+
+const removeProspectFromList = (prospectId: string) => {
+    emit('removeProspect', prospectId);
+    if (selectedProspect.value?.id === prospectId) isModalOpen.value = false;
+};
+
+const onListItemEnter = (prospectId: string) => { highlightedProspectId.value = prospectId; };
+const onListItemLeave = () => { highlightedProspectId.value = null; };
+
+const openProspectModal = (prospect: Prospect) => {
+    const savedVersion = props.prospects.find(p => p.id === prospect.id);
+    selectedProspect.value = { ...(savedVersion || prospect) };
+    isModalOpen.value = true;
+    generatedEmail.value = '';
+    nextTick(() => createIcons({ icons }));
+};
+
+const handleSaveProspectUpdates = () => {
+  if (selectedProspect.value) {
+    emit('updateProspect', JSON.parse(JSON.stringify(selectedProspect.value)));
+  }
+};
+
+const getIconHtml = (prospect: Prospect) => {
+    let iconClass = '', iconName = 'sparkles';
+    if (props.mode === 'residential') {
+        iconClass = `icon-residential-${prospect.status}`;
+        iconName = 'home';
+    } else {
+        iconClass = `icon-${prospect.type}`;
+        if (prospect.isClient) iconClass = 'icon-client';
+        if (prospect.isDue) iconClass += ' icon-client-due';
+        switch (prospect.type) {
+            case 'permit': iconName = 'file-text'; break;
+            case 'news': iconName = 'newspaper'; break;
+            default: iconName = 'building-2'; break;
         }
-        isAuthReady.value = true;
-        fetchInitialData();
-      });
-
-      if (typeof __initial_auth_token__ !== 'undefined' && __initial_auth_token__) {
-        await signInWithCustomToken(auth.value!, __initial_auth_token__);
-      } else {
-        await signInAnonymously(auth.value!);
-      }
-    } catch (error) {
-      console.error('Firebase initialization or authentication failed:', error);
-      isAuthReady.value = true;
-      appState.prospects = ALL_PROSPECTS;
     }
-  } else {
-    console.log('Firebase config not found. Running in local-only mock data mode.');
-    appState.prospects = ALL_PROSPECTS;
-    isAuthReady.value = true;
-  }
-});
-
-const fetchInitialData = () => {
-  if (!db.value || !userId.value) return;
-  const prospectsColRef = collection(db.value, `artifacts/${appId.value}/users/${userId.value}/prospects`);
-  onSnapshot(prospectsColRef, (snapshot) => {
-    const prospectsFromDb: Prospect[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as Prospect }));
-    appState.prospects = prospectsFromDb;
-  }, (error) => {
-    console.error("Error fetching prospects:", error);
-  });
+    return `<div class="icon-base ${iconClass}"><i data-lucide="${iconName}" class="w-5 h-5"></i></div>`;
 };
 
-const handleUpdateProspect = async (prospect: Prospect) => {
-  if (!db.value || !userId.value || !prospect.id) return;
-  try {
-    const docRef = doc(db.value, `artifacts/${appId.value}/users/${userId.value}/prospects`, prospect.id);
-    await updateDoc(docRef, prospect);
-  } catch (e) {
-    console.error("Error updating prospect: ", e);
-  }
-};
+const createPopupContent = (prospect: Prospect) => `
+  <div class="w-60 -m-3 font-sans">
+    <div class="p-3">
+        <h3 class="text-base font-bold text-slate-800">${prospect.name || prospect.homeowner}</h3>
+        <p class="text-sm text-slate-600 capitalize">${(prospect.courtType || prospect.type).replace(/_/g, ' ')}</p>
+        <p class="text-xs text-slate-500 mt-1 italic truncate">${prospect.aiSummary || 'No summary available.'}</p>
+    </div>
+    <div class="bg-slate-50 p-2 text-center border-t border-slate-200">
+         <button class="view-details-button text-indigo-600 font-semibold text-sm hover:underline" data-prospect-id="${prospect.id}">View Details</button>
+    </div>
+  </div>`;
 
-// --- SIDEBAR LOGIC ---
-const isSidebarOpen = ref(false);
-const navItems = ref([
-  { name: 'Dashboard', icon: LayoutDashboard, view: View.Dashboard },
-  { name: 'Residential Prospecting', icon: Map, view: View.ResidentialProspecting },
-  { name: 'Interactive Map', icon: Users, view: View.InteractiveMap },
-  { name: 'Lead Intelligence', icon: CircleDot, view: View.LeadIntelligence },
-  { name: 'Reports', icon: FileText, view: View.Reports },
-  { name: 'Settings', icon: Settings, view: View.Settings },
-]);
-const isOpenClass = computed(() => (isSidebarOpen.value ? 'translate-x-0' : '-translate-x-full'));
+const updateMarkers = () => {
+    if (!map || !markerLayer) return;
+    markerLayer.clearLayers();
+    markerRefs = {};
+    const prospectsToDisplay = currentProspects.value;
 
-// --- DASHBOARD LOGIC ---
-const recentProspects = computed(() => {
-  return appState.prospects.slice().sort(() => -1).slice(0, 5);
-});
+    prospectsToDisplay.forEach(prospect => {
+        if (!prospect.coords) return;
+        const icon = L.divIcon({ html: getIconHtml(prospect), className: 'transition-transform duration-200' });
+        const marker = L.marker(prospect.coords, { icon }).addTo(markerLayer!);
+        marker.bindPopup(createPopupContent(prospect));
+        markerRefs[prospect.id] = marker;
 
-// --- COMBINED MAP LOGIC ---
-const map = ref<L.Map | null>(null);
-const focusedProspectId = ref<string | null>(null);
-const searchQuery = ref('');
-const markers = ref<L.Marker[]>([]);
-const isHeatmapActive = ref(false);
-const heatmapLayer = ref<any | null>(null); // Fixed: Changed type to `any`
-const showFilterPanel = ref(false);
-const radarLayer = ref<L.Circle | null>(null);
-const isRadarActive = ref(false);
-
-const filterIcon = computed(() => showFilterPanel.value ? FilterX : Filter);
-
-const filteredProspects = computed(() => {
-  if (!searchQuery.value) {
-    return appState.prospects;
-  }
-  return appState.prospects.filter(prospect =>
-    Object.values(prospect).some(value =>
-      String(value).toLowerCase().includes(searchQuery.value.toLowerCase())
-    )
-  );
-});
-
-watch(() => focusedProspectId.value, (newId) => {
-  if (newId) {
-    const prospect = appState.prospects.find(p => p.id === newId);
-    if (prospect && map.value) {
-      map.value.flyTo([prospect.latitude, prospect.longitude], 16);
-    }
-  }
-});
-
-const focusOnProspect = (prospect: Prospect) => {
-  focusedProspectId.value = prospect.id;
-  if (map.value) {
-    map.value.flyTo([prospect.latitude, prospect.longitude], 16);
-  }
-};
-
-const clearSearch = () => {
-  searchQuery.value = '';
-};
-
-const toggleFilterPanel = () => {
-  showFilterPanel.value = !showFilterPanel.value;
+        marker.on('popupopen', (e) => {
+            const button = e.popup.getElement()?.querySelector('.view-details-button');
+            button?.addEventListener('click', () => {
+                const prospectId = button.getAttribute('data-prospect-id');
+                if (prospectId) {
+                   const fullProspect = props.prospects.find(p => p.id === prospectId) || prospectsToDisplay.find(p => p.id === prospectId);
+                   if (fullProspect) openProspectModal(fullProspect);
+                }
+            });
+            nextTick(() => createIcons({ icons }));
+        });
+    });
+    nextTick(() => createIcons({ icons }));
 };
 
 const toggleHeatmap = () => {
-  isHeatmapActive.value = !isHeatmapActive.value;
-  if (map.value) {
-    if (isHeatmapActive.value) {
-      if (radarLayer.value) radarLayer.value.remove();
-      markers.value.forEach(marker => marker.remove());
-      const points = appState.prospects.map(p => [p.latitude, p.longitude, 1]);
-      heatmapLayer.value = (L as any).heatLayer(points, {
-        radius: 25, blur: 15, maxZoom: 17, gradient: { 0.4: 'blue', 0.6: 'cyan', 0.8: 'lime', 1.0: 'red' }
-      }).addTo(map.value as L.Map);
-    } else {
-      if (heatmapLayer.value) heatmapLayer.value.remove();
-      markers.value.forEach(marker => marker.addTo(map.value as L.Map));
+    if (!map) return;
+    isHeatmapVisible.value = !isHeatmapVisible.value;
+
+    if (isHeatmapVisible.value) {
+        if (map.getSize().y === 0) {
+            nextTick(() => toggleHeatmap());
+            return;
+        }
+        const points = props.prospects
+            .filter(p => p.type !== 'residential' && p.coords)
+            .map(p => [p.coords[0], p.coords[1], 1]);
+            
+        if (!heatmapLayer) {
+            heatmapLayer = (L as any).heatLayer(points, { radius: 25, blur: 15, maxZoom: 17 });
+        } else {
+            heatmapLayer.setLatLngs(points);
+        }
+        map.addLayer(heatmapLayer);
+    } else if (heatmapLayer) {
+        map.removeLayer(heatmapLayer);
     }
-  }
 };
 
-const toggleRadar = () => {
-  isRadarActive.value = !isRadarActive.value;
-  if (map.value) {
-    if (isRadarActive.value) {
-      if (heatmapLayer.value) heatmapLayer.value.remove();
-      markers.value.forEach(marker => marker.remove());
-      const center = L.latLng(33.4484, -112.0740); // Center of Phoenix
-      radarLayer.value = L.circle(center, {
-        color: 'blue', fillColor: '#3080ff', fillOpacity: 0.2, radius: 25000 // 25km radius
-      }).addTo(map.value);
-    } else {
-      if (radarLayer.value) radarLayer.value.remove();
-      markers.value.forEach(marker => marker.addTo(map.value as L.Map));
+
+const clearDrawing = () => {
+    if (drawnItems) drawnItems.clearLayers();
+    drawnAreaGeoJSON.value = null;
+    if (scanMethod.value === 'draw' && drawControl?._toolbars.draw) {
+        drawControl._toolbars.draw._modes.polygon.handler.enable();
     }
-  }
 };
 
-const renderMarkers = () => {
-  if (!map.value) return;
-  markers.value.forEach(marker => marker.remove());
-  markers.value = [];
-  filteredProspects.value.forEach(prospect => {
-    const marker = L.marker([prospect.latitude, prospect.longitude])
-      .addTo(map.value as L.Map)
-      .bindPopup(`<b>${prospect.propertyAddress}</b><br>${prospect.permitType}`);
-    markers.value.push(marker);
-  });
+const generateMockProspects = (bounds: any, polygonGeoJSON: any = null): Prospect[] => {
+    const prospects: Prospect[] = [];
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
+    for (let i = 0; i < 10; i++) {
+        const lat = sw.lat + Math.random() * (ne.lat - sw.lat);
+        const lng = sw.lng + Math.random() * (ne.lng - sw.lng);
+        const conditionScore = parseFloat((Math.random() * 5 + 4.5).toFixed(1));
+        prospects.push({
+            id: `mock_${i}`, type: 'residential', coords: [lat, lng], name: `Mock Residence ${i}`,
+            homeowner: 'Mock Homeowner', address: '123 Mockingbird Lane', courtType: 'Tennis',
+            conditionScore, status: conditionScore > 7 ? 'good' : 'worn',
+            aiSummary: 'This is a mock AI summary.'
+        } as Prospect);
+    }
+    return prospects;
 };
 
-watch(() => filteredProspects.value, () => {
-  if (!isHeatmapActive.value && !isRadarActive.value) {
-    renderMarkers();
-  }
-}, { immediate: true });
+const executeScan = (bounds: L.LatLngBounds, geojson: any = null) => {
+    scanStatus.value = 'scanning';
+    residentialResults.value = [];
+    markerLayer?.clearLayers();
+    activeSidebarTab.value = 'results';
+    setTimeout(() => {
+        residentialResults.value = generateMockProspects(bounds, geojson);
+        updateMarkers();
+        scanStatus.value = 'complete';
+    }, 2500);
+};
+
+const handleScan = () => executeScan(map!.getBounds());
+const handleScanSelection = () => executeScan(L.geoJSON(drawnAreaGeoJSON.value).getBounds(), drawnAreaGeoJSON.value);
+
+const handleGenerateEmail = async () => { 
+    isGeneratingEmail.value = true;
+    setTimeout(() => {
+        generatedEmail.value = `Subject: Regarding your ${selectedProspect.value?.courtType} court...\n\nHello ${selectedProspect.value?.homeowner}, ...`;
+        isGeneratingEmail.value = false;
+    }, 1500);
+};
 
 onMounted(() => {
-  if (document.getElementById('map')) {
-    map.value = L.map('map').setView([33.4484, -112.074], 10);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    }).addTo(map.value as L.Map);
-    renderMarkers();
-  }
+    nextTick(() => {
+        if (mapContainerRef.value && !map) {
+            map = L.map(mapContainerRef.value, { zoomControl: false }).setView([33.48, -112.0740], 11);
+            L.control.zoom({ position: 'topright' }).addTo(map);
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri' }).addTo(map);
+            
+            markerLayer = L.layerGroup().addTo(map);
+            drawnItems = new L.FeatureGroup().addTo(map);
+            
+            drawControl = new (L.Control as any).Draw({
+                draw: { polygon: { shapeOptions: { color: '#4f46e5' } }, polyline: false, rectangle: false, circle: false, marker: false, circlemarker: false },
+                edit: { featureGroup: drawnItems }
+            });
+
+            map.on(L.Draw.Event.CREATED, (event: any) => {
+                if (drawnItems) { drawnItems.clearLayers(); drawnItems.addLayer(event.layer); }
+                drawnAreaGeoJSON.value = event.layer.toGeoJSON();
+            });
+
+            resizeObserver = new ResizeObserver(() => map?.invalidateSize({ debounceMoveend: true }));
+            resizeObserver.observe(mapContainerRef.value);
+
+            if (props.mode === 'commercial') {
+                const types = new Set(props.prospects.filter(p => p.type !== 'residential').map(p => p.type));
+                types.forEach(type => filters.value[type] = true);
+            }
+            
+            updateMarkers();
+            createIcons({ icons });
+        }
+    });
 });
 
-// --- UI STATE & EVENT HANDLERS ---
-const currentViewPayload = ref<any>({});
-const setCurrentView = (view: View, payload: any = {}) => {
-  appState.currentView = view;
-  focusedProspectId.value = payload.prospectId ? payload.prospectId.toString() : null;
-  currentViewPayload.value = payload;
-  isSidebarOpen.value = false;
-};
-
-const pageTitle = computed(() => {
-  const viewKey = Object.keys(View).find(key => (View as any)[key] === appState.currentView);
-  if (!viewKey) return 'Dashboard';
-  return viewKey.replace(/([A-Z])/g, ' $1').trim();
+onUnmounted(() => {
+    resizeObserver?.disconnect();
+    if (map) { map.remove(); map = null; }
 });
 
-const mainContentClass = computed(() => {
-  const isFullBleed = [View.InteractiveMap, View.ResidentialProspecting].includes(appState.currentView as any);
-  return isFullBleed ? 'flex-1 flex flex-col min-h-0' : 'flex-1 overflow-y-auto';
+watch(() => props.prospects, updateMarkers, { deep: true, immediate: true });
+watch(filters, updateMarkers, { deep: true });
+watch(residentialResults, updateMarkers, {deep: true });
+watch(activeSidebarTab, updateMarkers);
+watch(highlightedProspectId, (newId, oldId) => {
+    if (oldId && markerRefs[oldId]) markerRefs[oldId].getElement()?.classList.remove('map-marker-highlight');
+    if (newId && markerRefs[newId]) markerRefs[newId].getElement()?.classList.add('map-marker-highlight');
+});
+watch(scanMethod, (newMethod) => {
+    if (!map) return;
+    if (newMethod === 'draw' && props.mode === 'residential') {
+        map.addControl(drawControl);
+        drawControl._toolbars.draw._modes.polygon.handler.enable();
+    } else if (drawControl._map) {
+        drawControl.remove();
+    }
 });
 </script>
 
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-/* Tailwind CSS is assumed to be available from the environment. */
-.font-inter {
-  font-family: 'Inter', sans-serif;
-}
-#map {
-  height: 100%;
-}
-</style>
+<template>
+  <div class="relative h-full w-full flex-1 flex">
+    <div class="relative flex-1 flex flex-col min-h-0">
+        <div ref="mapContainerRef" class="flex-1 w-full h-full"></div>
+        <div v-if="mode === 'residential' && scanStatus === 'scanning'" class="absolute inset-0 radar-grid z-[440] pointer-events-none"></div>
+        <div v-if="mode === 'residential' && scanStatus === 'scanning'" class="absolute inset-0 radar-scanner pointer-events-none"></div>
+    </div>
+    
+    <div class="absolute top-4 left-4 z-[500] bg-white p-3 rounded-lg shadow-lg">
+      <h3 class="font-bold mb-2 text-slate-800">{{ mode === 'residential' ? 'Radar Controls' : 'Map Filters' }}</h3>
+      <div v-if="mode === 'residential'" class="flex items-center gap-2">
+         <div class="bg-white rounded-lg shadow-sm flex p-1 border">
+              <button @click="scanMethod = 'view'" :class="['p-2 rounded', scanMethod === 'view' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-500 hover:bg-slate-100']" title="Scan Map View"><i data-lucide="scan-search" class="w-5 h-5"></i></button>
+              <button @click="scanMethod = 'draw'" :class="['p-2 rounded', scanMethod === 'draw' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-500 hover:bg-slate-100']" title="Draw Area"><i data-lucide="edit-3" class="w-5 h-5"></i></button>
+          </div>
+         <PrimaryButton :label="scanButtonLabel" icon="radar" :is-loading="scanStatus === 'scanning'" :disabled="isScanButtonDisabled" @click="scanMethod === 'view' ? handleScan() : handleScanSelection()" />
+          <button v-if="drawnAreaGeoJSON" @click="clearDrawing" title="Clear Selection" class="p-2 bg-white text-slate-700 font-semibold border border-slate-300 rounded-lg shadow-sm hover:bg-red-50 hover:text-red-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div v-else class="space-y-2">
+        <div v-for="type in Object.keys(filters)" :key="type" class="flex items-center">
+            <input :id="`filter-${type}`" v-model="filters[type]" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+            <label :for="`filter-${type}`" class="ml-2 text-sm text-gray-700 capitalize">{{ type.replace(/_/g, ' ') }}</label>
+        </div>
+        <button @click="toggleHeatmap" class="mt-2 text-sm text-indigo-600 font-semibold hover:underline">{{ isHeatmapVisible ? 'Hide Heatmap' : 'Show Heatmap' }}</button>
+      </div>
+    </div>
+    
+    <div class="absolute bottom-4 left-4 z-[500] bg-white p-3 rounded-lg shadow-lg">
+      <h3 class="font-bold mb-2 text-slate-800">Legend</h3>
+      <div class="space-y-2">
+        <div v-for="item in legendItems" :key="item.label" class="flex items-center">
+          <div v-html="`<div class='icon-base ${item.class}'><i data-lucide='${item.icon}' class='w-4 h-4'></i></div>`" class="mr-2"></div>
+          <span class="text-sm text-slate-700">{{ item.label }}</span>
+        </div>
+      </div>
+    </div>
+
+    <aside class="w-96 bg-white border-l border-slate-200 flex-col flex-shrink-0 hidden md:flex">
+        <div class="p-4 border-b border-slate-200 flex-shrink-0">
+            <h3 class="text-xl font-bold text-slate-800">{{ mode === 'residential' ? 'Prospecting' : 'Map Data' }}</h3>
+            <div v-if="mode === 'residential'" class="mt-2 border-b border-slate-200">
+                <nav class="-mb-px flex space-x-4">
+                    <button @click="activeSidebarTab = 'results'" :class="['px-3 py-2 font-medium text-sm', activeSidebarTab === 'results' ? 'border-b-2 border-indigo-500 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700']">Scan Results <span v-if="residentialResults.length > 0" class="ml-1 px-2 py-0.5 bg-indigo-100 text-indigo-600 rounded-full text-xs">{{ residentialResults.length }}</span></button>
+                    <button @click="activeSidebarTab = 'saved'" :class="['px-3 py-2 font-medium text-sm', activeSidebarTab === 'saved' ? 'border-b-2 border-indigo-500 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700']">Saved <span v-if="savedProspects.length > 0" class="ml-1 px-2 py-0.5 bg-slate-200 text-slate-600 rounded-full text-xs">{{ savedProspects.length }}</span></button>
+                </nav>
+            </div>
+        </div>
+        <div class="flex-1 overflow-y-auto min-h-0">
+            <ul class="divide-y divide-slate-200">
+                <li v-for="prospect in currentProspects" :key="prospect.id" @mouseenter="onListItemEnter(prospect.id)" @mouseleave="onListItemLeave" :class="{'bg-indigo-50': prospect.id === highlightedProspectId}" class="p-4 hover:bg-slate-50 cursor-pointer">
+                    <div @click="openProspectModal(prospect)">
+                        <p class="font-bold text-slate-800">{{ prospect.name || prospect.homeowner }}</p>
+                        <p class="text-sm text-slate-600">{{ prospect.address || prospect.type.replace(/_/g, ' ') }}</p>
+                    </div>
+                </li>
+            </ul>
+        </div>
+    </aside>
+    
+    <div v-if="isModalOpen && selectedProspect" class="fixed inset-0 bg-black bg-opacity-50 z-[1001] flex items-center justify-center p-4" @click="isModalOpen = false">
+      <div @click.stop class="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+          <header class="p-4 border-b flex justify-between items-center">
+              <h2 class="text-lg font-bold">{{ selectedProspect.name || selectedProspect.homeowner }}</h2>
+              <button @click="isModalOpen = false" class="p-1"><i data-lucide="x"></i></button>
+          </header>
+          <div class="p-4 overflow-y-auto space-y-4">
+              <p class="italic">{{ selectedProspect.aiSummary }}</p>
+              <div v-if="isSaved(selectedProspect.id)">
+                  <hr/>
+                  <div>
+                      <label for="status-select" class="block text-sm font-medium text-gray-700">Status</label>
+                      <select id="status-select" v-model="selectedProspect.status" @change="handleSaveProspectUpdates" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                          <option>New</option><option>Contacted</option><option>Proposal Sent</option><option>Not Interested</option>
+                      </select>
+                  </div>
+                  <div>
+                      <label for="notes" class="block text-sm font-medium text-gray-700">Notes</label>
+                      <textarea id="notes" v-model="selectedProspect.notes" @blur="handleSaveProspectUpdates" rows="3" class="mt-1 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md"></textarea>
+                  </div>
+                  <PrimaryButton
+                      :label="isGeneratingEmail ? 'Generating...' : 'Generate Outreach Email'"
+                      icon="sparkles" :is-loading="isGeneratingEmail" @click="handleGenerateEmail"
+                  />
+                  <div v-if="generatedEmail" class="mt-2 p-2 bg-gray-100 rounded-md text-sm whitespace-pre-wrap" v-html="generatedEmail"></div>
+              </div>
+          </div>
+          <footer class="p-4 border-t flex justify-between">
+              <button v-if="isSaved(selectedProspect.id)" @click="removeProspectFromList(selectedProspect.id)" class="text-red-600 hover:underline">Remove</button>
+              <PrimaryButton v-else @click="saveProspect(selectedProspect)" label="Save Prospect" icon="save"/>
+              <button @click="isModalOpen = false" class="px-4 py-2 bg-gray-200 rounded-md">Close</button>
+          </footer>
+      </div>
+    </div>
+  </div>
+</template>
+

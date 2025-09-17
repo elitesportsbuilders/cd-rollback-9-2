@@ -3,7 +3,7 @@
 import './styles.css';
 
 import { ref, computed, reactive, onMounted, defineAsyncComponent } from 'vue';
-import { Menu, Radar } from 'lucide-vue-next';
+import { Menu, ShieldCheck } from 'lucide-vue-next';
 import Sidebar from '@/components/Sidebar.vue';
 import { View } from '@/types';
 import { ALL_PROSPECTS, ACTIVITY_FEED_DATA, COMPETITORS, USER_INTEL_DATA, COMPETITOR_SEO_DATA } from '@/data';
@@ -37,7 +37,6 @@ const viewMap: Record<string, any> = {
   [View.LeadIntelligence]: defineAsyncComponent(() => import('@/components/LeadIntelligence.vue')),
   [View.CompetitorIntel]: defineAsyncComponent(() => import('@/components/CompetitorIntel.vue')),
   [View.MyIntel]: defineAsyncComponent(() => import('@/components/MyIntel.vue')),
-  // Both map views now use the same CombinedMap component
   [View.ResidentialProspecting]: defineAsyncComponent(() => import('@/components/CombinedMap.vue')),
   [View.InteractiveMap]: defineAsyncComponent(() => import('@/components/CombinedMap.vue')),
   [View.Reports]: defineAsyncComponent(() => import('@/components/Reports.vue')),
@@ -123,15 +122,19 @@ onMounted(async () => {
     }
   } else {
     console.log('Firebase config not found. Running in local-only mock data mode.');
-    // In this mode, use static mock data
-    appState.prospects = ALL_PROSPECTS.map(p => ({ ...p, id: p.id.toString() }));
-    // Correct mapping for UserIntel to match the interface
-    appState.userIntel = USER_INTEL_DATA.map(i => ({
-      id: (i as any).id.toString(), // Ensure ID is a string
-      type: (i as any).type || 'General Note', // Add a default type if missing
-      note: (i as any).content || (i as any).note, // Map 'content' to 'note' if present
-      date: (i as any).date,
-    }));
+    appState.prospects = ALL_PROSPECTS.map(p => {
+        const { id, ...rest } = p;
+        return { ...rest, id: id.toString() };
+    });
+    appState.userIntel = USER_INTEL_DATA.map(i => {
+        const { id, content, ...rest } = i as any;
+        return {
+            ...rest,
+            id: id.toString(),
+            type: i.type || 'General Note', // Use existing type or provide a default
+            note: content, // Map 'content' to 'note'
+        };
+    });
     isAuthReady.value = true;
   }
 });
@@ -160,11 +163,13 @@ const fetchInitialData = () => {
 const handleAddProspect = async (prospectToAdd: any) => {
   if (!db.value || !userId.value) return;
   
-  const newId = prospectToAdd.id || crypto.randomUUID();
+  const { id, ...rest } = prospectToAdd;
+  const newId = id || crypto.randomUUID();
+  const docData = { ...rest, id: newId };
 
   try {
       const docRef = doc(db.value, `artifacts/${appId.value}/users/${userId.value}/prospects`, newId);
-      await setDoc(docRef, { ...prospectToAdd, id: newId });
+      await setDoc(docRef, docData);
       console.log("Prospect added/updated successfully.");
   } catch (e) {
       console.error("Error adding prospect: ", e);
@@ -211,7 +216,6 @@ const isSidebarOpen = ref(false);
 const handleSyncLead = async (leadId: string) => {
     const lead = appState.prospects.find(p => p.id === leadId);
     if(lead) {
-        // Here you would implement your actual CRM sync logic
         console.log(`Syncing lead ${lead.name} to CRM...`);
         await handleUpdateProspect({ ...lead, isSynced: true });
     }
@@ -243,7 +247,6 @@ const updateTrackedCompetitors = async (newList: string[]) => {
 
 const setCurrentView = (view: View, payload: any = {}) => {
   appState.currentView = view;
-  // Make sure IDs are strings for consistency
   focusedProspectId.value = payload.prospectId ? payload.prospectId.toString() : null;
   currentViewPayload.value = payload;
   isSidebarOpen.value = false;
@@ -271,12 +274,15 @@ const componentProps = computed(() => {
     case View.LeadIntelligence:
       return { leads: appState.prospects.filter(p => isLead(p) || 'isAcknowledged' in p) };
     case View.ResidentialProspecting:
-      return { prospects: appState.prospects, mode: 'residential' };
+      return { 
+          prospects: appState.prospects, 
+          focusedProspectId: focusedProspectId.value,
+          mode: 'residential' 
+      };
     case View.InteractiveMap:
       return { 
           focusedProspectId: focusedProspectId.value,
           prospects: appState.prospects,
-          filter: currentViewPayload.value?.filter,
           mode: 'commercial'
       };
     case View.Integrations:
@@ -295,7 +301,11 @@ const componentProps = computed(() => {
     case View.SeoDashboard:
         return { seoData: COMPETITOR_SEO_DATA };
     case View.Reports:
-      return { ...currentViewPayload.value };
+      return { 
+          ...currentViewPayload.value,
+          prospects: appState.prospects,
+          leads: appState.prospects.filter(p => isLead(p) || 'isAcknowledged' in p)
+      };
     default:
       return {};
   }
@@ -304,9 +314,8 @@ const componentProps = computed(() => {
 const pageTitle = computed(() => {
     const viewKey = Object.keys(View).find(key => (View as any)[key] === appState.currentView);
     if (!viewKey) return 'Dashboard';
-
-    if (appState.currentView === View.SeoDashboard) return 'SEO & Ads Command Center';
     
+    if (appState.currentView === View.SeoDashboard) return 'SEO & Ads Command Center';
     if (appState.currentView === View.InteractiveMap) return 'Commercial Map';
     if (appState.currentView === View.ResidentialProspecting) return 'Residential Prospecting';
 
@@ -321,8 +330,7 @@ const mainContentClass = computed(() => {
 
 <template>
     <div v-if="isAuthReady">
-        <div :class="{ 'h-screen overflow-hidden md:overflow-auto': isSidebarOpen }" class="relative min-h-screen bg-slate-100 md:flex">
-            <!-- Corrected prop name: currentViewProps is now passed from currentViewPayload -->
+        <div :class="{ 'h-screen overflow-hidden md:overflow-auto': isSidebarOpen }" class="relative min-h-screen bg-slate-100 md:flex font-sans">
             <Sidebar 
                 :current-view="appState.currentView" 
                 :current-view-props="currentViewPayload"
@@ -334,7 +342,7 @@ const mainContentClass = computed(() => {
                 <header class="md:hidden flex justify-between items-center p-4 bg-white border-b border-slate-200 sticky top-0 z-10">
                     <button @click="isSidebarOpen = true" class="text-slate-600 p-1 -ml-1"><Menu class="w-6 h-6" /></button>
                     <div class="flex items-center">
-                        <Radar class="w-6 h-6 mr-2 text-indigo-600" />
+                        <ShieldCheck class="w-6 h-6 mr-2 text-indigo-600" />
                         <h1 class="text-lg font-bold text-slate-800">{{ pageTitle }}</h1>
                     </div>
                     <div class="w-6"></div>
@@ -368,3 +376,4 @@ const mainContentClass = computed(() => {
         </div>
     </div>
 </template>
+
