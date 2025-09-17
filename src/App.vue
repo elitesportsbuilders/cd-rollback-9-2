@@ -32,6 +32,7 @@ const appId = ref<string>('default-app-id');
 const isAuthReady = ref(false);
 
 // --- COMPONENT MAPPING ---
+// This now correctly points both map views to our single, unified CombinedMap component.
 const viewMap: Record<string, any> = {
   [View.Dashboard]: defineAsyncComponent(() => import('@/components/Dashboard.vue')),
   [View.LeadIntelligence]: defineAsyncComponent(() => import('@/components/LeadIntelligence.vue')),
@@ -103,8 +104,11 @@ onMounted(async () => {
         if (user) {
           userId.value = user.uid;
         } else {
-          userId.value = crypto.randomUUID(); // Anonymous user
-          await signInAnonymously(auth.value!);
+          // Fallback for anonymous users if custom token fails
+          if (!auth.value?.currentUser) {
+             await signInAnonymously(auth.value!);
+             userId.value = auth.value?.currentUser?.uid || crypto.randomUUID();
+          }
         }
         isAuthReady.value = true;
         // Start listening to data once authenticated
@@ -323,7 +327,7 @@ const pageTitle = computed(() => {
 });
 
 const mainContentClass = computed(() => {
-    const isFullBleed = [View.InteractiveMap, View.ResidentialProspecting, View.SeoDashboard, View.ProjectHub].includes(appState.currentView as any);
+    const isFullBleed = [View.InteractiveMap, View.ResidentialProspecting, View.ProjectHub].includes(appState.currentView as any);
     return isFullBleed ? 'flex-1 flex flex-col min-h-0' : 'flex-1 overflow-y-auto';
 });
 </script>
@@ -376,4 +380,3 @@ const mainContentClass = computed(() => {
         </div>
     </div>
 </template>
-
