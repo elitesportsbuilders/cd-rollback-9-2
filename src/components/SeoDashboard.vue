@@ -7,9 +7,10 @@ import {
   PieChart,
   Sparkles,
   Lightbulb,
-  Crosshair
+  Crosshair,
 } from 'lucide-vue-next';
 import { Chart, registerables } from 'chart.js';
+import { logAiStudioCode } from '@/utils/devtools';
 
 Chart.register(...registerables);
 
@@ -19,7 +20,7 @@ const props = defineProps<{
 }>();
 
 // --- STATE ---
-const selectedKeyword = ref(props.seoData.keywords[0]);
+const selectedKeyword = ref('');
 const lineChartCanvas = ref<HTMLCanvasElement | null>(null);
 const pieChartCanvas = ref<HTMLCanvasElement | null>(null);
 let seoLineChart: Chart | null = null;
@@ -33,17 +34,19 @@ const adError = ref<string | null>(null);
 
 // --- COMPUTED PROPERTIES ---
 const currentRankings = computed(() => {
+  if (!props.seoData || !selectedKeyword.value) return [];
   return props.seoData.rankings
     .filter((r: any) => r.keyword === selectedKeyword.value)
     .sort((a: any, b: any) => a.rank - b.rank);
 });
 
 const lineChartData = computed(() => {
-  if (!selectedKeyword.value) return null;
+  if (!props.seoData || !selectedKeyword.value) return null;
   return (props.seoData.history as any)[selectedKeyword.value];
 });
 
 const shareOfVoiceData = computed(() => {
+    if (!props.seoData) return null;
     const topPositions = props.seoData.rankings.filter((r: any) => r.rank <= 3);
     const competitorCounts = topPositions.reduce((acc: { [key: string]: number }, curr: any) => {
         acc[curr.competitor] = (acc[curr.competitor] || 0) + 1;
@@ -65,6 +68,7 @@ const shareOfVoiceData = computed(() => {
 });
 
 const keywordOpportunities = computed(() => {
+    if (!props.seoData) return [];
     const opportunities: any[] = [];
 
     // 1. Find "Low Hanging Fruit"
@@ -95,6 +99,11 @@ const keywordOpportunities = computed(() => {
 
 
 // --- METHODS ---
+const initializeKeyword = () => {
+  if (props.seoData && props.seoData.keywords.length > 0) {
+    selectedKeyword.value = props.seoData.keywords[0];
+  }
+};
 
 const handleOpportunityClick = (keyword: string) => {
     selectedKeyword.value = keyword;
@@ -121,13 +130,17 @@ const generateAds = async () => {
     ];
 
     try {
+        const payload = {
+          contents: [{ parts: [{ text: userPrompt }] }],
+          systemInstruction: { parts: [{ text: systemPrompt }] }
+        };
+
+        logAiStudioCode(userPrompt);
+
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: userPrompt }] }],
-                systemInstruction: { parts: [{ text: systemPrompt }] }
-            })
+            body: JSON.stringify(payload)
         });
 
         if (!response.ok) {
@@ -182,8 +195,7 @@ const renderLineChart = () => {
       responsive: true,
       maintainAspectRatio: false,
       scales: {
-        y: { reverse: true, beginAtZero: false, ticks: { stepSize: 1, callback: (value) => `#${value}` }, title: { display: true, text: 'Google Ranking' } },
-        x: { title: { display: true, text: 'Month (2025)' } }
+        y: { reverse: true, beginAtZero: false, ticks: { stepSize: 1, callback: (value) => `#${value}` }, title: { display: true, text: 'Google Ranking' } }
       },
       plugins: {
         legend: { position: 'bottom' },
@@ -223,6 +235,7 @@ const renderPieChart = () => {
 
 
 onMounted(() => {
+  initializeKeyword();
   renderLineChart();
   renderPieChart();
   generateAds();
@@ -237,7 +250,7 @@ watch(selectedKeyword, () => {
 </script>
 
 <template>
-  <div class="p-4 sm:p-6 lg:p-8 bg-slate-100 h-full flex flex-col">
+  <div v-if="seoData" class="p-4 sm:p-6 lg:p-8 bg-slate-100 h-full flex flex-col">
     <header class="mb-8">
       <h1 class="text-3xl font-bold text-slate-800">SEO & Ads Command Center</h1>
       <p class="text-slate-600 mt-1">Analyze competitor rankings and generate new ad strategies.</p>

@@ -13,11 +13,8 @@ RUN npm install
 # Copy the rest of your application code
 COPY . .
 
-# Build your application (if it's a TypeScript/frontend project)
-RUN npm run build
-
-# Expose the port your app listens on (must match the --port in cloudbuild.yaml)
+# Expose the port your app listens on
 EXPOSE 8080
 
 # Define the command to run your app
-CMD ["npm", "start"]
+CMD ["npm", "run", "dev"]

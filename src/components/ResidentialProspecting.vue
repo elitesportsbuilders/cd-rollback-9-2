@@ -10,15 +10,15 @@ const props = defineProps<{
   prospects: any[];
 }>();
 
-const emit = defineEmits(['setCurrentView', 'addProspect', 'removeProspect']);
+const emit = defineEmits(['setCurrentView', 'addProspect', 'removeProspect', 'updateProspect']);
 
 // --- Types ---
-type ProspectStatus = 'New' | 'Contacted' | 'Interested' | 'Not Interested';
+type ProspectStatus = 'New' | 'Contacted' | 'Proposal Sent' | 'Not Interested';
 type ScanStatus = 'idle' | 'scanning' | 'complete';
 type ScanMethod = 'view' | 'draw';
 
 interface Prospect {
-  id: number;
+  id: string;
   type: 'residential';
   coords: [number, number];
   name: string;
@@ -93,7 +93,7 @@ const generateMockProspects = (bounds: any, polygonGeoJSON: any = null): Prospec
                 : `Visible wear and fading on the ${courtType.toLowerCase()} court surface. High potential for a resurfacing lead.`;
 
             prospects.push({
-                id: 500 + i + Math.floor(Math.random() * 1000),
+                id: (500 + i + Math.floor(Math.random() * 1000)).toString(), // Ensure ID is a string
                 type: 'residential',
                 coords: [lat, lng],
                 name: `${lastName} Residence`,
@@ -116,7 +116,7 @@ let map: L.Map | null = null;
 let markerLayer: L.LayerGroup | null = null;
 let drawnItems: L.FeatureGroup | null = null;
 let drawControl: any = null;
-let markerRefs: { [key: number]: L.Marker } = {};
+let markerRefs: { [key: string]: L.Marker } = {};
 let resizeObserver: ResizeObserver | null = null;
 
 const scanStatus = ref<ScanStatus>('idle');
@@ -128,7 +128,7 @@ const isModalOpen = ref(false);
 const isGeneratingEmail = ref(false);
 const generatedEmail = ref('');
 const searchQuery = ref('');
-const highlightedProspectId = ref<number | null>(null);
+const highlightedProspectId = ref<string | null>(null);
 
 const drawnAreaGeoJSON = ref<any>(null);
 const scanMethod = ref<ScanMethod>('view');
@@ -167,7 +167,7 @@ watch(scanMethod, (newMethod) => {
     }
 });
 
-const isSaved = (prospectId: number) => {
+const isSaved = (prospectId: string) => {
     return props.prospects.some(p => p.id === prospectId);
 };
 
@@ -182,14 +182,14 @@ const saveProspect = (prospectToSave: Prospect) => {
     }
 };
 
-const removeProspectFromList = (prospectId: number) => {
+const removeProspectFromList = (prospectId: string) => {
     emit('removeProspect', prospectId);
     if(selectedProspect.value && selectedProspect.value.id === prospectId) {
         isModalOpen.value = false;
     }
 };
 
-const onListItemEnter = (prospectId: number) => {
+const onListItemEnter = (prospectId: string) => {
     highlightedProspectId.value = prospectId;
 };
 
@@ -208,7 +208,6 @@ watch(highlightedProspectId, (newId, oldId) => {
         L.DomUtil.addClass(newMarkerEl, 'map-marker-highlight');
     }
 });
-
 
 watch(isMobilePanelOpen, (isOpen) => {
     if(isOpen) {
@@ -293,6 +292,7 @@ const handleScan = () => {
     map.invalidateSize();
     const bounds = map.getBounds();
     if (!bounds?.isValid() || bounds.getSouthWest().equals(bounds.getNorthEast())) {
+        // Use a modal-like UI instead of alert()
         alert("Could not determine map area. Please pan the map slightly and try again.");
         return;
     }
@@ -327,6 +327,12 @@ const handleGenerateEmail = async () => {
 
 const getStatusClass = (status: string) => `status-${status.replace(' Sent', '').replace(' ', '-')}`;
 
+const handleSaveProspectUpdates = () => {
+  if (selectedProspect.value) {
+    emit('updateProspect', selectedProspect.value);
+  }
+};
+
 const showMyLocation = () => {
   const currentMap = map;
   if (navigator.geolocation && currentMap) {
@@ -339,6 +345,7 @@ const showMyLocation = () => {
       },
       (error) => {
         console.error("Error getting user location:", error.message);
+        // Use a modal-like UI instead of alert()
         alert("Could not retrieve your location.");
       }
     );
@@ -661,7 +668,7 @@ onUnmounted(() => {
                         <div class="space-y-4">
                             <div>
                                 <label for="prospect-status" class="block text-sm font-medium text-slate-600">Lead Status</label>
-                                <select id="prospect-status" v-model="selectedProspect.status" class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                <select id="prospect-status" v-model="selectedProspect.status" @change="handleSaveProspectUpdates" class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                                     <option>New</option>
                                     <option>Contacted</option>
                                     <option>Proposal Sent</option>
@@ -670,7 +677,7 @@ onUnmounted(() => {
                             </div>
                             <div>
                                 <label for="prospect-notes" class="block text-sm font-medium text-slate-600">Notes</label>
-                                <textarea id="prospect-notes" v-model="selectedProspect.notes" rows="3" class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Log call notes, follow-up actions, etc."></textarea>
+                                <textarea id="prospect-notes" v-model="selectedProspect.notes" rows="3" @blur="handleSaveProspectUpdates" class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Log call notes, follow-up actions, etc."></textarea>
                             </div>
                         </div>
                     </div>

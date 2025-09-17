@@ -1,20 +1,19 @@
-/**
- * Defines the possible views/pages in the application.
- * Used for navigation and dynamic component rendering.
- */
 export enum View {
-  Dashboard = 'Dashboard',
-  LeadIntelligence = 'LeadIntelligence',
-  CompetitorIntel = 'CompetitorIntel',
-  MyIntel = 'MyIntel',
-  ResidentialProspecting = 'ResidentialProspecting',
-  InteractiveMap = 'InteractiveMap',
-  Reports = 'Reports',
-  AiInspection = 'AiInspection',
-  Settings = 'Settings',
-  Integrations = 'Integrations',
-  PipedriveAuth = 'PipedriveAuth',
-  MonthlyReport = 'MonthlyReport',
-  ProjectHub = 'ProjectHub',
-  SeoDashboard = 'SeoDashboard',
+  Dashboard = 'dashboard',
+  LeadIntelligence = 'lead-intelligence',
+  CompetitorIntel = 'competitor-intel',
+  ProjectHub = 'project-hub',
+  ResidentialProspecting = 'residential-prospecting',
+  InteractiveMap = 'interactive-map',
+  SeoDashboard = 'seo-dashboard',
+  AiInspection = 'ai-inspection',
+  Integrations = 'integrations',
+  Settings = 'settings',
+  MonthlyReport = 'monthly-report',
+  MyIntel = 'my-intel',
+  PipedriveAuth = 'pipedrive-auth',
+  Reports = 'reports',
+  TennisCourtCard = 'tennis-court-card',
+  TestView = 'test-view',
+  Tooltip = 'tooltip',
 }

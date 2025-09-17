@@ -13,11 +13,11 @@ const props = defineProps<{
   prospects: any[];
 }>();
 
-const emit = defineEmits(['setCurrentView']);
+const emit = defineEmits(['setCurrentView', 'updateProspect']);
 
 // --- COMPONENT STATE ---
 const clientProjects = computed(() => props.prospects.filter(p => p.isClient));
-const selectedProjectId = ref<number | null>(null);
+const selectedProjectId = ref<string | null>(null); // Use string to match Firestore IDs
 const searchTerm = ref('');
 
 const selectedProject = computed(() => {

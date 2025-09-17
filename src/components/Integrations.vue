@@ -3,8 +3,9 @@ import { View } from '@/types';
 import PrimaryButton from '@/components/PrimaryButton.vue';
 import Card from '@/components/Card.vue';
 
-defineProps<{
-  isConnected: boolean;
+// Define props, making 'isConnected' optional and providing a default value.
+const props = defineProps<{
+  isConnected?: boolean; // Changed to optional with '?'
 }>();
 
 const emit = defineEmits(['setCurrentView', 'setIntegrationState']);
@@ -32,7 +33,8 @@ const setCurrentView = (view: string) => emit('setCurrentView', view);
                         <p class="text-sm text-slate-500">Sync qualified leads from Court Detector directly into your Pipedrive sales pipeline as new deals.</p>
                     </div>
                     <div>
-                        <div v-if="isConnected" class="text-right">
+                        <!-- Use props.isConnected here, which will be undefined or false if not provided -->
+                        <div v-if="props.isConnected" class="text-right">
                             <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
                                 <i data-lucide="check-circle" class="w-4 h-4 mr-2"></i>
                                 Connected
@@ -47,7 +49,8 @@ const setCurrentView = (view: string) => emit('setCurrentView', view);
                         />
                     </div>
                 </div>
-                <div v-if="isConnected" class="mt-4 pt-4 border-t border-slate-200 bg-slate-50 p-4 rounded-lg">
+                <!-- Use props.isConnected here as well -->
+                <div v-if="props.isConnected" class="mt-4 pt-4 border-t border-slate-200 bg-slate-50 p-4 rounded-lg">
                      <h4 class="text-sm font-bold text-slate-600 mb-2">Sync Settings</h4>
                      <p class="text-xs text-slate-500">Configure how leads are created in Pipedrive.</p>
                      <div class="mt-2 space-y-2">

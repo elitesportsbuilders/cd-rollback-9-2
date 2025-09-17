@@ -2,16 +2,22 @@
 // --- 1. GLOBAL STYLES IMPORT ---
 import './styles.css';
 
-import { ref, computed, reactive, watch, onMounted, defineAsyncComponent } from 'vue';
+import { ref, computed, reactive, onMounted, defineAsyncComponent } from 'vue';
 import { Menu, Radar } from 'lucide-vue-next';
 import Sidebar from '@/components/Sidebar.vue';
 import { View } from '@/types';
-import { ALL_PROSPECTS, COMPETITORS, USER_INTEL_DATA, ACTIVITY_FEED_DATA, COMPETITOR_SEO_DATA } from '@/data';
+import { ALL_PROSPECTS, ACTIVITY_FEED_DATA, COMPETITORS, USER_INTEL_DATA, COMPETITOR_SEO_DATA } from '@/data';
 
 // --- 2. FIREBASE IMPORTS ---
 import { initializeApp } from 'firebase/app';
-import { getFirestore, Firestore } from 'firebase/firestore';
-import { getAuth, signInWithCustomToken, signInAnonymously, Auth } from 'firebase/auth';
+import { getFirestore, Firestore, collection, onSnapshot, doc, updateDoc, setDoc, addDoc, deleteDoc, getDocs } from 'firebase/firestore';
+import { getAuth, signInWithCustomToken, signInAnonymously, Auth, onAuthStateChanged } from 'firebase/auth';
+import { setLogLevel } from 'firebase/firestore';
+import 'leaflet/dist/leaflet.css';
+import 'leaflet-draw/dist/leaflet.draw.css';
+
+// Set Firebase log level for debugging
+setLogLevel('debug');
 
 // --- DECLARE GLOBAL VARIABLES ---
 declare const __firebase_config__: string;
@@ -21,38 +27,9 @@ declare const __initial_auth_token__: string;
 // --- 3. FIREBASE & APP STATE ---
 const db = ref<Firestore | null>(null);
 const auth = ref<Auth | null>(null);
+const userId = ref<string | null>(null);
 const appId = ref<string>('default-app-id');
-const isFirebaseConnected = ref(false);
 const isAuthReady = ref(false);
-
-// --- LIFECYCLE HOOKS ---
-onMounted(async () => {
-  debugger;
-  if (typeof __firebase_config__ !== 'undefined' && __firebase_config__) {
-    console.log('Firebase config found. Initializing and authenticating...');
-    try {
-      const firebaseConfig = JSON.parse(__firebase_config__);
-      const firebaseApp = initializeApp(firebaseConfig);
-      db.value = getFirestore(firebaseApp);
-      auth.value = getAuth(firebaseApp);
-      appId.value = typeof __app_id__ !== 'undefined' ? __app_id__ : 'default-app-id';
-
-      if (typeof __initial_auth_token__ !== 'undefined' && __initial_auth_token__) {
-        await signInWithCustomToken(auth.value, __initial_auth_token__);
-      } else {
-        await signInAnonymously(auth.value);
-      }
-      isFirebaseConnected.value = true;
-    } catch (error) {
-      console.error('Firebase initialization or authentication failed:', error);
-      isFirebaseConnected.value = false; 
-    }
-  } else {
-    console.log('Firebase config not found. Running in local-only mode.');
-  }
-  isAuthReady.value = true;
-});
-
 
 // --- COMPONENT MAPPING ---
 const viewMap: Record<string, any> = {
@@ -60,8 +37,9 @@ const viewMap: Record<string, any> = {
   [View.LeadIntelligence]: defineAsyncComponent(() => import('@/components/LeadIntelligence.vue')),
   [View.CompetitorIntel]: defineAsyncComponent(() => import('@/components/CompetitorIntel.vue')),
   [View.MyIntel]: defineAsyncComponent(() => import('@/components/MyIntel.vue')),
-  [View.ResidentialProspecting]: defineAsyncComponent(() => import('@/components/ResidentialProspecting.vue')),
-  [View.InteractiveMap]: defineAsyncComponent(() => import('@/components/InteractiveMap.vue')),
+  // Both map views now use the same CombinedMap component
+  [View.ResidentialProspecting]: defineAsyncComponent(() => import('@/components/CombinedMap.vue')),
+  [View.InteractiveMap]: defineAsyncComponent(() => import('@/components/CombinedMap.vue')),
   [View.Reports]: defineAsyncComponent(() => import('@/components/Reports.vue')),
   [View.Settings]: defineAsyncComponent(() => import('@/components/Settings.vue')),
   [View.AiInspection]: defineAsyncComponent(() => import('@/components/AiInspection.vue')),
@@ -74,93 +52,199 @@ const viewMap: Record<string, any> = {
 
 // --- INTERFACES & HELPERS ---
 interface Prospect {
-  id: number;
+  id: string;
   type: string;
   isSynced?: boolean;
   isAcknowledged?: boolean;
   [key: string]: any;
 }
 
+interface UserIntel {
+  id: string;
+  type: string;
+  note: string;
+  date: string;
+}
+
 interface AppState {
-  currentView: string;
+  currentView: View;
   integrationState: { isPipedriveConnected: boolean };
   prospects: Prospect[];
-  trackedCompetitors: any[];
-  userIntel: any[];
+  trackedCompetitors: string[];
+  userIntel: UserIntel[];
 }
 function isLead(item: Prospect) {
-    return item.type === 'permit' || item.type === 'news';
+  return item.type === 'permit' || item.type === 'news';
 }
 
-// --- STATE MANAGEMENT ---
-const STORAGE_KEY = 'courtDetectorSaaSData';
-
 const loadInitialState = (): AppState => {
-  const defaults = {
+  return {
     currentView: View.Dashboard,
     integrationState: { isPipedriveConnected: false },
-    prospects: ALL_PROSPECTS,
+    prospects: [], // Start with an empty array
     trackedCompetitors: COMPETITORS,
-    userIntel: USER_INTEL_DATA,
+    userIntel: [], // Start with an empty array
   };
-
-  return defaults;
 };
 
 const appState = reactive<AppState>(loadInitialState());
 
-watch(appState, (newState) => {
-  try {
-  } catch (e) {
-    console.error("Failed to save state:", e);
-  }
-}, { deep: true });
+// --- FIREBASE INITIALIZATION AND DATA FETCHING ---
+onMounted(async () => {
+  if (typeof __firebase_config__ !== 'undefined' && __firebase_config__) {
+    console.log('Firebase config found. Initializing and authenticating...');
+    try {
+      const firebaseConfig = JSON.parse(__firebase_config__);
+      const firebaseApp = initializeApp(firebaseConfig);
+      db.value = getFirestore(firebaseApp);
+      auth.value = getAuth(firebaseApp);
+      appId.value = typeof __app_id__ !== 'undefined' ? __app_id__ : 'default-app-id';
 
-// --- UI STATE & EVENT HANDLERS ---
-const focusedProspectId = ref<number | null>(null);
-const currentViewPayload = ref<any>({});
-const isSidebarOpen = ref(false);
+      onAuthStateChanged(auth.value, async (user) => {
+        if (user) {
+          userId.value = user.uid;
+        } else {
+          userId.value = crypto.randomUUID(); // Anonymous user
+          await signInAnonymously(auth.value!);
+        }
+        isAuthReady.value = true;
+        // Start listening to data once authenticated
+        fetchInitialData();
+      });
 
-const handleSyncLead = (leadId: number) => {
-  appState.prospects = appState.prospects.map(prospect => {
-    if (isLead(prospect) && prospect.id === leadId) {
-      return { ...prospect, isSynced: true };
+      if (typeof __initial_auth_token__ !== 'undefined' && __initial_auth_token__) {
+        await signInWithCustomToken(auth.value!, __initial_auth_token__);
+      } else {
+        await signInAnonymously(auth.value!);
+      }
+    } catch (error) {
+      console.error('Firebase initialization or authentication failed:', error);
+      isAuthReady.value = true;
     }
-    return prospect;
+  } else {
+    console.log('Firebase config not found. Running in local-only mock data mode.');
+    // In this mode, use static mock data
+    appState.prospects = ALL_PROSPECTS.map(p => ({ ...p, id: p.id.toString() }));
+    // Correct mapping for UserIntel to match the interface
+    appState.userIntel = USER_INTEL_DATA.map(i => ({
+      id: (i as any).id.toString(), // Ensure ID is a string
+      type: (i as any).type || 'General Note', // Add a default type if missing
+      note: (i as any).content || (i as any).note, // Map 'content' to 'note' if present
+      date: (i as any).date,
+    }));
+    isAuthReady.value = true;
+  }
+});
+
+const fetchInitialData = () => {
+  if (!db.value || !userId.value) return;
+
+  const prospectsColRef = collection(db.value, `artifacts/${appId.value}/users/${userId.value}/prospects`);
+  onSnapshot(prospectsColRef, (snapshot) => {
+    const prospectsFromDb: Prospect[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as Prospect }));
+    appState.prospects = prospectsFromDb;
+  }, (error) => {
+    console.error("Error fetching prospects:", error);
+  });
+
+  const userIntelColRef = collection(db.value, `artifacts/${appId.value}/users/${userId.value}/intel`);
+  onSnapshot(userIntelColRef, (snapshot) => {
+    const intelFromDb: UserIntel[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as UserIntel }));
+    appState.userIntel = intelFromDb;
+  }, (error) => {
+    console.error("Error fetching user intel:", error);
   });
 };
 
-const addIntel = (newIntel: any) => {
-  appState.userIntel.unshift({ ...newIntel, id: Date.now() });
+// --- DATA MUTATION FUNCTIONS (FIRESTORE) ---
+const handleAddProspect = async (prospectToAdd: any) => {
+  if (!db.value || !userId.value) return;
+  
+  const newId = prospectToAdd.id || crypto.randomUUID();
+
+  try {
+      const docRef = doc(db.value, `artifacts/${appId.value}/users/${userId.value}/prospects`, newId);
+      await setDoc(docRef, { ...prospectToAdd, id: newId });
+      console.log("Prospect added/updated successfully.");
+  } catch (e) {
+      console.error("Error adding prospect: ", e);
+  }
 };
 
-const updateTrackedCompetitors = (newList: string[]) => {
-    appState.trackedCompetitors = newList;
+const handleRemoveProspect = async (prospectId: string) => {
+  if (!db.value || !userId.value) return;
+  try {
+    const docRef = doc(db.value, `artifacts/${appId.value}/users/${userId.value}/prospects`, prospectId);
+    await deleteDoc(docRef);
+    console.log("Prospect removed successfully.");
+  } catch (e) {
+    console.error("Error removing prospect: ", e);
+  }
 };
 
-const handleAddProspect = (prospectToAdd: Prospect) => {
-    const exists = appState.prospects.some(p => p.id === prospectToAdd.id);
-    if (!exists) {
-        appState.prospects.push(prospectToAdd);
+const handleUpdateProspect = async (prospect: Prospect) => {
+  if (!db.value || !userId.value || !prospect.id) return;
+  try {
+    const docRef = doc(db.value, `artifacts/${appId.value}/users/${userId.value}/prospects`, prospect.id);
+    await updateDoc(docRef, prospect);
+    console.log("Prospect updated successfully.");
+  } catch (e) {
+    console.error("Error updating prospect: ", e);
+  }
+};
+
+const handleAddIntel = async (newIntel: any) => {
+  if (!db.value || !userId.value) return;
+  try {
+    await addDoc(collection(db.value, `artifacts/${appId.value}/users/${userId.value}/intel`), newIntel);
+    console.log("User intel added successfully.");
+  } catch (e) {
+    console.error("Error adding user intel: ", e);
+  }
+};
+
+// --- UI STATE & EVENT HANDLERS ---
+const focusedProspectId = ref<string | null>(null);
+const currentViewPayload = ref<any>({});
+const isSidebarOpen = ref(false);
+
+const handleSyncLead = async (leadId: string) => {
+    const lead = appState.prospects.find(p => p.id === leadId);
+    if(lead) {
+        // Here you would implement your actual CRM sync logic
+        console.log(`Syncing lead ${lead.name} to CRM...`);
+        await handleUpdateProspect({ ...lead, isSynced: true });
     }
 };
 
-const handleRemoveProspect = (prospectId: number) => {
-    appState.prospects = appState.prospects.filter(p => p.id !== prospectId);
+const handleAcknowledgeLead = async (leadId: string) => {
+  const lead = appState.prospects.find(p => p.id === leadId);
+  if(lead) {
+      await handleUpdateProspect({ ...lead, isAcknowledged: true });
+  }
 };
 
-const handleAcknowledgeLead = (leadId: number) => {
-    appState.prospects = appState.prospects.map(p => {
-        if (p.id === leadId) {
-            return { ...p, isAcknowledged: true };
-        }
-        return p;
-    });
+const updateTrackedCompetitors = async (newList: string[]) => {
+  if (!db.value || !userId.value) return;
+  const competitorsRef = collection(db.value, `artifacts/${appId.value}/users/${userId.value}/trackedCompetitors`);
+
+  try {
+      const existingDocs = await getDocs(competitorsRef);
+      const deletePromises = existingDocs.docs.map(d => deleteDoc(d.ref));
+      await Promise.all(deletePromises);
+
+      const addPromises = newList.map(c => setDoc(doc(competitorsRef, c), { name: c }));
+      await Promise.all(addPromises);
+      console.log("Tracked competitors updated successfully.");
+  } catch (e) {
+      console.error("Error updating tracked competitors: ", e);
+  }
 };
 
-const setCurrentView = (view: string, payload: any = {}) => {
+const setCurrentView = (view: View, payload: any = {}) => {
   appState.currentView = view;
-  focusedProspectId.value = payload.prospectId || null;
+  // Make sure IDs are strings for consistency
+  focusedProspectId.value = payload.prospectId ? payload.prospectId.toString() : null;
   currentViewPayload.value = payload;
   isSidebarOpen.value = false;
 };
@@ -187,12 +271,13 @@ const componentProps = computed(() => {
     case View.LeadIntelligence:
       return { leads: appState.prospects.filter(p => isLead(p) || 'isAcknowledged' in p) };
     case View.ResidentialProspecting:
-      return { prospects: appState.prospects };
+      return { prospects: appState.prospects, mode: 'residential' };
     case View.InteractiveMap:
       return { 
           focusedProspectId: focusedProspectId.value,
           prospects: appState.prospects,
-          filter: currentViewPayload.value?.filter 
+          filter: currentViewPayload.value?.filter,
+          mode: 'commercial'
       };
     case View.Integrations:
       return { isConnected: appState.integrationState.isPipedriveConnected };
@@ -221,6 +306,9 @@ const pageTitle = computed(() => {
     if (!viewKey) return 'Dashboard';
 
     if (appState.currentView === View.SeoDashboard) return 'SEO & Ads Command Center';
+    
+    if (appState.currentView === View.InteractiveMap) return 'Commercial Map';
+    if (appState.currentView === View.ResidentialProspecting) return 'Residential Prospecting';
 
     return viewKey.replace(/([A-Z])/g, ' $1').trim();
 });
@@ -234,8 +322,10 @@ const mainContentClass = computed(() => {
 <template>
     <div v-if="isAuthReady">
         <div :class="{ 'h-screen overflow-hidden md:overflow-auto': isSidebarOpen }" class="relative min-h-screen bg-slate-100 md:flex">
+            <!-- Corrected prop name: currentViewProps is now passed from currentViewPayload -->
             <Sidebar 
                 :current-view="appState.currentView" 
+                :current-view-props="currentViewPayload"
                 @set-current-view="setCurrentView" 
                 :is-open="isSidebarOpen"
             />
@@ -256,12 +346,13 @@ const mainContentClass = computed(() => {
                   v-bind="componentProps"
                   @set-current-view="setCurrentView"
                   @sync-lead="handleSyncLead"
-                  @add-intel="addIntel"
+                  @add-intel="handleAddIntel"
                   @set-integration-state="setIntegrationState"
                   @update-tracked-competitors="updateTrackedCompetitors"
                   @add-prospect="handleAddProspect"
                   @remove-prospect="handleRemoveProspect"
                   @acknowledge-lead="handleAcknowledgeLead"
+                  @update-prospect="handleUpdateProspect"
                 />
             </main>
         </div>

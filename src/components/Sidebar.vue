@@ -5,19 +5,19 @@ import {
   Target,
   Users,
   Map,
-  BarChart3,
   Settings,
   ShieldCheck,
   Zap,
   TestTube2,
   PieChart,
-  FolderKanban // Import the new icon
+  FolderKanban
 } from 'lucide-vue-next';
 import { View } from '@/types';
 
 defineProps<{
   currentView: string;
   isOpen: boolean;
+  currentViewProps: object;
 }>();
 
 const emit = defineEmits(['setCurrentView']);
@@ -26,7 +26,7 @@ const mainNavItems = [
   { view: View.Dashboard, icon: LayoutDashboard, label: 'Dashboard' },
   { view: View.LeadIntelligence, icon: Lightbulb, label: 'Lead Intelligence' },
   { view: View.CompetitorIntel, icon: Target, label: 'Competitor Intel' },
-  { view: View.ProjectHub, icon: FolderKanban, label: 'Project Hub' }, // Add the new Project Hub tab
+  { view: View.ProjectHub, icon: FolderKanban, label: 'Project Hub' },
   { view: View.ResidentialProspecting, icon: Users, label: 'Residential Prospecting' },
   { view: View.InteractiveMap, icon: Map, label: 'Interactive Map' },
   { view: View.SeoDashboard, icon: PieChart, label: 'SEO & Ads', highlight: true },

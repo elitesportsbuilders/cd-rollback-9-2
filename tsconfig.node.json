@@ -2,10 +2,10 @@
   "compilerOptions": {
     "composite": true,
     "skipLibCheck": true,
-
     "module": "ESNext",
-    "moduleResolution": "bundler",
-    "allowSyntheticDefaultImports": true
+    "moduleResolution": "Node",
+    "allowSyntheticDefaultImports": true,
+    "types": ["node", "estree", "geojson"]
   },
   "include": ["vite.config.ts", "postcss.config.js", "tailwind.config.js"]
 }

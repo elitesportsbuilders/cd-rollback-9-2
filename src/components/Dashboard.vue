@@ -1,16 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { Lightbulb, FileText, TrendingUp, Megaphone, Target, Map, Wrench, Sparkles, ChevronRight, ShieldCheck } from 'lucide-vue-next';
+import { Lightbulb, FileText, TrendingUp, Megaphone, Wrench, Sparkles, ChevronRight, ShieldCheck } from 'lucide-vue-next';
 import { View } from '@/types';
 import { Chart, registerables, ChartEvent, ActiveElement } from 'chart.js';
 import { logAiStudioCode } from '@/utils/devtools';
 
 Chart.register(...registerables);
 
+import { CompetitorIntelEvent } from '@/data/index';
+
 const props = defineProps<{
-  activityFeed: any[];
+  activityFeed: CompetitorIntelEvent[];
   userName?: string;
   prospects: any[];
+  progress?: number; // Add progress prop
 }>();
 
 const emit = defineEmits(['setCurrentView']);
@@ -26,13 +29,13 @@ let prospectChart: Chart | null = null;
 // --- Gemini API Call for Morning Briefing ---
 const generateAiBriefing = async () => {
   if (!props.activityFeed || props.activityFeed.length === 0) {
-    aiBriefing.value = "No recent activity to analyze.";
+    aiBriefing.value = "No recent activity to analyze. The AI model needs data to provide a briefing.";
     isBriefingLoading.value = false;
     return;
   }
 
   isBriefingLoading.value = true;
-  
+
   const formattedActivities = props.activityFeed
     .slice(0, 5)
     .map(a => `- ${a.summary} (Source: ${a.source})`)
@@ -40,8 +43,8 @@ const generateAiBriefing = async () => {
 
   const systemPrompt = "You are a sharp and concise sales analyst for Elite Sports Builders, a company specializing in athletic court construction in Arizona. Your audience is the sales manager, Mike Woelfel.";
   const userPrompt = `Based on the following recent market activities, provide a 2-3 sentence strategic briefing for the morning sales meeting. Focus on the single biggest opportunity and the most urgent threat. Be direct and actionable.\n\nRecent Activities:\n${formattedActivities}`;
-  
-  const apiKey = "";
+
+  const apiKey = ""; // Ensure this is populated from your environment variables in a real app
   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
 
   try {
@@ -73,7 +76,7 @@ const generateAiBriefing = async () => {
 
   } catch (error) {
     const fallbackMessage = "The new permit for the Paradise Valley Country Club is our top priority; it's a high-value project directly in our wheelhouse. Keep an eye on Ace Resurfacing—their new ad campaign for 'pickleball court resurfacing' means we'll need to be aggressive to win that business.";
-    
+
     if (error instanceof Error && error.message.includes('403')) {
         console.warn("AI Briefing failed due to a missing API key (403 Forbidden). Displaying mock data. Please configure a valid Gemini API key for live results.");
         aiBriefing.value = `[Live AI Briefing Disabled - Showing Example]\n\n${fallbackMessage}`;
@@ -96,7 +99,7 @@ const getClientAlertLevel = (project: any): 'resurface' | 'warranty' | 'none' =>
   // --- END DEMO ---
 
   if (!project || !project.isClient || !project.completionDate) return 'none';
-  const today = new Date('2025-09-08T12:00:00Z');
+  const today = new Date(); // Use current date
   const completionDate = new Date(project.completionDate);
   const warrantyExpiration = new Date(project.warrantyExpiration);
 
@@ -137,12 +140,13 @@ const chartData = computed(() => ({
 }));
 
 // --- Chart Rendering & Interactivity ---
-const handleChartClick = (event: ChartEvent, elements: ActiveElement[]) => {
+// Renamed 'event' to '_event' to suppress TypeScript warning
+const handleChartClick = (_event: ChartEvent, elements: ActiveElement[]) => {
     if (!prospectChart || !elements.length) return;
 
     const firstPoint = elements[0];
     const label = prospectChart.data.labels?.[firstPoint.index];
-    
+
     if (label === 'New AI Leads') {
         emit('setCurrentView', View.LeadIntelligence);
     } else if (label === 'Existing Clients') {
@@ -190,6 +194,9 @@ watch(() => props.prospects, () => {
 watch(() => props.activityFeed, (newVal) => {
     if (newVal && newVal.length > 0) {
         generateAiBriefing();
+    } else if (newVal && newVal.length === 0) { // Added this else if for empty case after initial load
+        aiBriefing.value = "No recent activity to analyze. The AI model needs data to provide a briefing.";
+        isBriefingLoading.value = false;
     }
 }, { immediate: true });
 
@@ -264,6 +271,10 @@ const getIconColor = (activity: any) => {
               </div>
             </li>
           </ul>
+          <!-- Added message for no recent activity -->
+          <div v-if="activityFeed.length === 0 && !isBriefingLoading" class="text-center text-sm text-slate-500 py-4">
+              <p>No recent activity to display. Check back later!</p>
+          </div>
         </div>
       </div>
 
@@ -273,19 +284,23 @@ const getIconColor = (activity: any) => {
           <h3 class="font-bold text-slate-800 mb-4">Key Metrics</h3>
           <div class="relative w-full h-48 mb-6 cursor-pointer">
             <canvas ref="chartCanvas"></canvas>
+            <!-- Added message for no chart data -->
+            <div v-if="chartData.datasets[0].data.every(val => val === 0)" class="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 text-sm text-slate-500 rounded-lg">
+                No data to display in chart.
+            </div>
           </div>
           <div class="space-y-1">
             <button @click="emit('setCurrentView', View.LeadIntelligence)" class="w-full flex items-center justify-between text-left p-2 -m-2 rounded-lg hover:bg-slate-50 transition-colors">
                 <div class="flex items-center">
-                    <span class="w-3 h-3 rounded-full bg-indigo-500 mr-3"></span>
-                    <span class="font-medium text-slate-700">New AI Leads</span>
+                  <span class="w-3 h-3 rounded-full bg-indigo-500 mr-3"></span>
+                  <span class="font-medium text-slate-700">New AI Leads</span>
                 </div>
                 <span class="font-bold text-lg text-indigo-600">{{ newAiLeadsCount }}</span>
             </button>
             <div class="flex items-center justify-between p-2">
                 <div class="flex items-center">
-                    <span class="w-3 h-3 rounded-full bg-emerald-500 mr-3"></span>
-                    <span class="font-medium text-slate-700">Existing Clients</span>
+                  <span class="w-3 h-3 rounded-full bg-emerald-500 mr-3"></span>
+                  <span class="font-medium text-slate-700">Existing Clients</span>
                 </div>
                 <span class="font-bold text-lg text-emerald-600">{{ clients.length }}</span>
             </div>
@@ -329,7 +344,7 @@ const getIconColor = (activity: any) => {
               <span class="font-semibold text-indigo-700">Review New Leads</span>
               <ChevronRight class="w-5 h-5 text-indigo-600" />
             </button>
-             <button @click="emit('setCurrentView', View.InteractiveMap)" class="w-full flex justify-between items-center p-3 bg-slate-50 hover:bg-slate-100 rounded-lg text-left transition-colors">
+              <button @click="emit('setCurrentView', View.InteractiveMap)" class="w-full flex justify-between items-center p-3 bg-slate-50 hover:bg-slate-100 rounded-lg text-left transition-colors">
               <span class="font-semibold text-slate-700">View Project Map</span>
               <ChevronRight class="w-5 h-5 text-slate-500" />
             </button>
@@ -343,5 +358,3 @@ const getIconColor = (activity: any) => {
     </div>
   </div>
 </template>
-
-
