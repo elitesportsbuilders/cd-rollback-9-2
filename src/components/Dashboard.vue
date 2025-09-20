@@ -4,15 +4,19 @@ import { Lightbulb, FileText, TrendingUp, Megaphone, Wrench, Sparkles, ChevronRi
 import { View } from '@/types';
 import { Chart, registerables, ChartEvent, ActiveElement } from 'chart.js';
 import { logAiStudioCode } from '@/utils/devtools';
+import SeedCompetitorIntelButton from '@/components/SeedCompetitorIntelButton.vue';
+import SeedDataButtons from './SeedDataButtons.vue';
+import { CompetitorIntelEvent } from '@/data/index';
 
 Chart.register(...registerables);
 
-import { CompetitorIntelEvent } from '@/data/index';
-
+// --- Props ---
 const props = defineProps<{
   activityFeed: CompetitorIntelEvent[];
   userName?: string;
   prospects: any[];
+  appId: string;
+  userId: string;
   progress?: number; // Add progress prop
 }>();
 
@@ -139,6 +143,12 @@ const chartData = computed(() => ({
   }]
 }));
 
+// --- Important Competitor Intel Alert ---
+const importantCompetitorIntel = computed(() => {
+  // Filter for important competitor intel in activityFeed
+  return props.activityFeed.filter((intel: any) => intel.isImportant);
+});
+
 // --- Chart Rendering & Interactivity ---
 // Renamed 'event' to '_event' to suppress TypeScript warning
 const handleChartClick = (_event: ChartEvent, elements: ActiveElement[]) => {
@@ -223,6 +233,27 @@ const getIconColor = (activity: any) => {
       <p class="text-slate-600 mt-1">Here's your strategic briefing for the day.</p>
     </header>
 
+    <!-- Seed Button at Top -->
+    <div class="flex justify-end mb-4">
+      <SeedCompetitorIntelButton :appId="props.appId" :userId="props.userId" />
+    </div>
+
+    <!-- Seed Data Buttons -->
+    <div class="mb-4">
+      <SeedDataButtons :appId="appId" :userId="userId" />
+    </div>
+
+    <!-- Important Competitor Intel Alert -->
+    <div v-if="importantCompetitorIntel.length" class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 mb-6 rounded shadow flex items-center">
+      <svg class="w-6 h-6 mr-3 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 20h.01"/></svg>
+      <div>
+        <strong>Competitor Alert:</strong> You have {{ importantCompetitorIntel.length }} important competitor intel item(s) to review.
+        <ul class="list-disc ml-6 mt-1">
+          <li v-for="intel in importantCompetitorIntel" :key="intel.id">{{ intel.summary }}</li>
+        </ul>
+      </div>
+    </div>
+
     <!-- AI Morning Briefing -->
     <div class="mb-6 bg-white p-6 rounded-lg shadow-sm border border-slate-200">
       <h2 class="text-xl font-bold text-slate-800 flex items-center mb-3">
@@ -238,7 +269,6 @@ const getIconColor = (activity: any) => {
       </div>
       <p v-else class="text-slate-700 leading-relaxed" style="white-space: pre-wrap;">{{ aiBriefing }}</p>
     </div>
-
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <!-- Recent Activity Column -->

@@ -291,7 +291,11 @@ const updateMarkers = () => {
   prospectsToDisplay.forEach(prospect => {
       if (!prospect.coords) return;
       const icon = L.divIcon({ html: getIconHtml(prospect), className: 'transition-transform duration-200' });
-      const marker = L.marker(prospect.coords, { icon }).addTo(markerLayer!);
+      // Ensure coords is always a tuple [number, number]
+      const coords: [number, number] = Array.isArray(prospect.coords) && prospect.coords.length === 2
+        ? [prospect.coords[0], prospect.coords[1]]
+        : [0, 0]; // fallback to [0,0] if invalid
+      const marker = L.marker(coords, { icon }).addTo(markerLayer!);
       marker.bindPopup(createPopupContent(prospect));
       markerRefs[prospect.id] = marker;
 

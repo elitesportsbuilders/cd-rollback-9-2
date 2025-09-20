@@ -20,4 +20,9 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    port: 9002,
+    strictPort: true,
+    host: true,
+  },
 })

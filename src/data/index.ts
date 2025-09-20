@@ -49,6 +49,7 @@ interface RawCompetitorEvent {
     type: string;
     date: string;
     summary: string;
+    isImportant?: boolean;
 }
 
 // Existing interface for processed competitor events (has source and category)
@@ -156,14 +157,14 @@ export const CONTRACTOR_STATUS_DATA: CompetitorStatusData[] = [
 
 export const COMPETITOR_INTEL_EVENTS: { [key: string]: RawCompetitorEvent[] } = { // Uses RawCompetitorEvent
     'comp1': [
-        { id: 1, type: 'License Update', date: '2025-09-06', summary: 'Contractor license renewed with the AZ ROC.' },
-        { id: 2, type: 'New Ad Campaign', date: '2025-09-04', summary: 'Launched a new Google Ads campaign targeting "pickleball court resurfacing Phoenix".' },
+        { id: 1, type: 'License Update', date: '2025-09-06', summary: 'Contractor license renewed with the AZ ROC.', isImportant: false },
+        { id: 2, type: 'New Ad Campaign', date: '2025-09-04', summary: 'Launched a new Google Ads campaign targeting "pickleball court resurfacing Phoenix".', isImportant: true },
     ],
     'comp2': [
-        { id: 4, type: 'Permit Filed', date: '2025-09-05', summary: 'Filed a commercial permit with the City of Glendale for a new multi-court facility.' },
+        { id: 4, type: 'Permit Filed', date: '2025-09-05', summary: 'Filed a commercial permit with the City of Glendale for a new multi-court facility.', isImportant: true },
     ],
     'comp3': [
-        { id: 6, type: 'SEO Ranking Change', date: '2025-09-02', summary: 'Lost ranking for "running track repair", dropping off the first page.' },
+        { id: 6, type: 'SEO Ranking Change', date: '2025-09-02', summary: 'Lost ranking for "running track repair", dropping off the first page.', isImportant: false },
     ],
 };
 
@@ -215,3 +216,86 @@ export const COMPETITOR_SEO_DATA: CompetitorSeoData = {
 };
 
 export const USER_INTEL_DATA = [ { id: 1, date: "08/12/2025", content: "Met with the facilities manager at Scottsdale Ranch Park." }];
+
+// Mock Competitor Intel Events for Dashboard Alert Box
+export const CompetitorIntelEvent = [
+  {
+    id: 1,
+    summary: 'Competitor A launched a new product line targeting our key market.',
+    source: 'Industry News',
+    isImportant: true
+  },
+  {
+    id: 2,
+    summary: 'Competitor B received a major contract from a school district.',
+    source: 'Press Release',
+    isImportant: false
+  },
+  {
+    id: 3,
+    summary: 'Competitor C is rumored to be expanding into our region.',
+    source: 'Market Rumor',
+    isImportant: true
+  }
+];
+
+// --- Core Data Arrays ---
+
+export const mockLeads = [
+  {
+    id: 201,
+    type: 'lead',
+    name: 'Desert Ridge Tennis Expansion',
+    coords: [33.683, -111.978],
+    isAcknowledged: false,
+    aiScore: 8,
+    aiSummary: 'Expansion project for tennis courts at Desert Ridge. Good opportunity for resurfacing contract.',
+    source: 'Phoenix Permits',
+    sourceUrl: '#',
+    extractedData: { "Project Type": "Expansion", "Budget": "$250,000" }
+  },
+  {
+    id: 202,
+    type: 'lead',
+    name: 'Scottsdale Pickleball Complex',
+    coords: [33.494, -111.926],
+    isAcknowledged: false,
+    aiScore: 7,
+    aiSummary: 'New pickleball complex planned for Scottsdale. Potential for multi-year maintenance contract.',
+    source: 'Scottsdale City Council',
+    sourceUrl: '#',
+    extractedData: { "Status": "Planning" }
+  }
+];
+
+export const mockProspects = [
+  {
+    id: 601,
+    type: 'prospect',
+    coords: [33.600, -111.900],
+    name: 'Smith Residence',
+    status: 'good',
+    homeowner: 'Alice Smith',
+    address: '789 Pine St, Scottsdale, AZ',
+    courtType: 'Pickleball',
+    conditionScore: 9,
+    aiSummary: 'Excellent condition pickleball court. Maintenance contract possible.'
+  },
+  {
+    id: 602,
+    type: 'prospect',
+    coords: [33.610, -111.910],
+    name: 'Johnson Residence',
+    status: 'worn',
+    homeowner: 'Bob Johnson',
+    address: '321 Elm St, Scottsdale, AZ',
+    courtType: 'Tennis',
+    conditionScore: 5,
+    aiSummary: 'Tennis court with moderate wear. Resurfacing needed soon.'
+  }
+];
+
+export const mockUserIntel = [
+  { id: 2, date: "09/01/2025", content: "Called back the HOA president for Desert Ridge Tennis Expansion." },
+  { id: 3, date: "09/10/2025", content: "Received email from Scottsdale Pickleball Complex project manager." }
+];

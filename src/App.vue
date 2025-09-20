@@ -127,17 +127,17 @@ onMounted(async () => {
   } else {
     console.log('Firebase config not found. Running in local-only mock data mode.');
     appState.prospects = ALL_PROSPECTS.map(p => {
-        const { id, ...rest } = p;
-        return { ...rest, id: id.toString() };
+  const { id, ...rest } = p;
+  return { ...rest, id: id.toString() };
     });
     appState.userIntel = USER_INTEL_DATA.map(i => {
-        const { id, content, ...rest } = i as any;
-        return {
-            ...rest,
-            id: id.toString(),
-            type: i.type || 'General Note', // Use existing type or provide a default
-            note: content, // Map 'content' to 'note'
-        };
+    const { id, content, ...rest } = i as any;
+    return {
+      ...rest,
+      id: id.toString(),
+      type: (i as any).type || 'General Note', // Use existing type or provide a default
+      note: content, // Map 'content' to 'note'
+    };
     });
     isAuthReady.value = true;
   }
@@ -148,16 +148,16 @@ const fetchInitialData = () => {
 
   const prospectsColRef = collection(db.value, `artifacts/${appId.value}/users/${userId.value}/prospects`);
   onSnapshot(prospectsColRef, (snapshot) => {
-    const prospectsFromDb: Prospect[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as Prospect }));
-    appState.prospects = prospectsFromDb;
+  const prospectsFromDb: Prospect[] = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+  appState.prospects = prospectsFromDb;
   }, (error) => {
     console.error("Error fetching prospects:", error);
   });
 
   const userIntelColRef = collection(db.value, `artifacts/${appId.value}/users/${userId.value}/intel`);
   onSnapshot(userIntelColRef, (snapshot) => {
-    const intelFromDb: UserIntel[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as UserIntel }));
-    appState.userIntel = intelFromDb;
+  const intelFromDb: UserIntel[] = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+  appState.userIntel = intelFromDb;
   }, (error) => {
     console.error("Error fetching user intel:", error);
   });
@@ -352,6 +352,7 @@ const mainContentClass = computed(() => {
                     <div class="w-6"></div>
                 </header>
                 
+                <!-- Remove the side-by-side comparison from the dashboard -->
                 <component 
                   :is="currentComponent"
                   :class="mainContentClass"

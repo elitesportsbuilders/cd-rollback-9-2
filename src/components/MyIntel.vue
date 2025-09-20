@@ -9,8 +9,15 @@ import {
     Lightbulb
 } from 'lucide-vue-next';
 
+interface Intel {
+  id: string;
+  type: string;
+  note: string;
+  date: string;
+}
+
 const props = defineProps<{
-  userIntel: any[];
+  userIntel: Intel[];
 }>();
 
 const emit = defineEmits(['addIntel']);
@@ -42,9 +49,7 @@ const handleSummarize = async () => {
   
   const userPrompt = `Summarize the following notes from a sports construction site visit into a concise, professional paragraph:\n\n---\n${newIntelNote.value}\n---`;
   
-  // In this environment, the API key is injected at runtime.
-  // We leave it as an empty string.
-  const apiKey = "";
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
 
   try {
@@ -69,8 +74,12 @@ const handleSummarize = async () => {
       throw new Error("No summary was returned from the API.");
     }
   } catch (error) {
-    console.error('Gemini API Error:', error);
-    summaryError.value = "Could not summarize notes. Please try again.";
+    console.error('Gemini API Error:', error);    
+    if (error instanceof Error && error.message.includes('403')) {
+        summaryError.value = "AI summarization is disabled. An API key is required.";
+    } else {
+        summaryError.value = "Could not summarize notes. Please try again.";
+    }
   } finally {
     isSummarizing.value = false;
   }
